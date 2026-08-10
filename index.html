@@ -828,7 +828,7 @@
       <div class="check-list">
         <label><input type="checkbox" id="opt-tolls"> Péages</label>
         <label><input type="checkbox" id="opt-ferries"> Traversiers / ferries</label>
-        <label><input type="checkbox" id="opt-borders" checked> Sans frontière (pas de passeport)</label>
+        <label><input type="checkbox" id="opt-borders" checked> Sans frontière CA/US/MX (pas de passeport)</label>
         <label><input type="checkbox" id="opt-traffic" checked> ETA avec trafic estimé</label>
       </div>
     </div>
@@ -949,8 +949,8 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
-<script src="./nav-pro.js?v=9"></script>
-<script src="./truck-network.js?v=9"></script>
+<script src="./nav-pro.js?v=10"></script>
+<script src="./truck-network.js?v=10"></script>
 <script>
   // Profil véhicule (Navigation Pro) — comptes reportés à plus tard
   let TRUCK = Object.assign({ hazmat: false }, NavPro.getActiveVehicleProfile());
@@ -1829,10 +1829,13 @@
       const stayDomestic = sameCountry || !!routeOpts.avoidBorders;
       const longHaul = haversine(origin[0], origin[1], destLatLng[0], destLatLng[1]) > 120000;
       const forceBorders = stayDomestic;
-      const borderExcludeLocs = (stayDomestic && originCountry === 'CA' && destCountry === 'CA'
-        && typeof TruckNetwork.canadaUsBorderExcludeLocations === 'function')
-        ? TruckNetwork.canadaUsBorderExcludeLocations()
-        : null;
+      const borderExcludeLocs = (stayDomestic && originCountry !== 'other'
+        && typeof TruckNetwork.borderExcludeLocationsForDomestic === 'function')
+        ? TruckNetwork.borderExcludeLocationsForDomestic(originCountry)
+        : (stayDomestic && originCountry === 'CA'
+          && typeof TruckNetwork.canadaUsBorderExcludeLocations === 'function'
+          ? TruckNetwork.canadaUsBorderExcludeLocations()
+          : null);
       const domesticVias = (stayDomestic && typeof TruckNetwork.domesticViaCandidates === 'function')
         ? TruckNetwork.domesticViaCandidates(origin, destLatLng)
         : [];
@@ -1856,6 +1859,10 @@
         return typeof TruckNetwork.tripCrossesIntoCountry === 'function'
           && TruckNetwork.tripCrossesIntoCountry(trip, 'MX');
       }
+      function crossesCA(trip){
+        return typeof TruckNetwork.tripCrossesIntoCountry === 'function'
+          && TruckNetwork.tripCrossesIntoCountry(trip, 'CA');
+      }
       function crossesForeign(trip){
         if (!trip) return false;
         // Noms d'autoroutes étrangères = rejet immédiat
@@ -1870,8 +1877,8 @@
           } catch (e) { /* ignore */ }
         }
         if (originCountry === 'CA') return crossesUS(trip) || crossesMX(trip);
-        if (originCountry === 'MX') return crossesUS(trip);
-        if (originCountry === 'US') return crossesMX(trip);
+        if (originCountry === 'MX') return crossesUS(trip) || crossesCA(trip);
+        if (originCountry === 'US') return crossesMX(trip) || crossesCA(trip);
         return crossesUS(trip);
       }
 
@@ -1938,11 +1945,10 @@
         let ranked = [];
         let best = null;
 
-        // A) CA→CA long : forcer d'abord le corridor domestique (Montréal / 401)
+        // A) Long trajet même pays : forcer d'abord un corridor domestique
         if (stayDomestic && longHaul && domesticVias.length) {
-          routeNote.textContent = 'Calcul sans frontière (corridor Canada)…';
-          // auto via Montréal en premier (Valhalla truck échoue souvent QC→Toronto)
-          const autoFirst = await tryAutoDomestic(excludes, [domesticVias[0]], 'Canada · via corridor · plus rapide');
+          routeNote.textContent = 'Calcul sans frontière (corridor ' + originCountry + ')…';
+          const autoFirst = await tryAutoDomestic(excludes, [domesticVias[0]], originCountry + ' · via corridor · plus rapide');
           if (autoFirst) return autoFirst;
           try {
             ranked = await gatherTruckTrips(excludes, [domesticVias[0]]);
@@ -1979,7 +1985,7 @@
         }
 
         if (!stayDomestic && ranked.length) return { best: ranked[0], ranked, netInfoExtra: '' };
-        throw new Error('Canada → Canada : aucun itinéraire sans frontière trouvé');
+        throw new Error(originCountry + ' → ' + destCountry + ' : aucun itinéraire sans frontière trouvé');
       }
 
       // Forcer la case UI si même pays
@@ -2558,11 +2564,11 @@
 
   function syncRouteOptionInputs(){
     const o = NavPro.getRouteOptions();
-    // Une seule migration vers « sans frontière » par défaut (v9)
+    // Une seule migration vers « sans frontière » par défaut (v10)
     try {
-      if (!localStorage.getItem('positionGps_borderDefault_v9')) {
+      if (!localStorage.getItem('positionGps_borderDefault_v10')) {
         NavPro.setRouteOptions({ avoidBorders: true });
-        localStorage.setItem('positionGps_borderDefault_v9', '1');
+        localStorage.setItem('positionGps_borderDefault_v10', '1');
         o.avoidBorders = true;
       }
     } catch (e) { /* ignore */ }

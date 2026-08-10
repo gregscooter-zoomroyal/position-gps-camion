@@ -708,29 +708,71 @@
     return foreign >= 2 || (total > 0 && foreign / total >= 0.08);
   }
 
-  /** Points à exclure le long de la frontière US (max Valhalla ~50) pour trajets CA→CA. */
-  function canadaUsBorderExcludeLocations() {
+  /** Points à exclure près des frontières pour rester dans le même pays (max ~48). */
+  function borderExcludeLocationsForDomestic(homeCountry) {
     var pts = [];
     var lon;
-    // Bande sud du Québec / Est Ontario → NY / VT
-    for (lon = -76.4; lon <= -71.4; lon += 0.35) {
-      pts.push({ lat: 44.92, lon: lon });
-      pts.push({ lat: 44.55, lon: lon });
-    }
-    // Couloir Albany / I-87
     var lat;
-    for (lat = 44.4; lat >= 42.7; lat -= 0.35) {
-      pts.push({ lat: lat, lon: -73.75 });
-      pts.push({ lat: lat, lon: -75.1 });
-    }
-    // Couloir I-81 Est NY
-    for (lat = 44.3; lat >= 43.0; lat -= 0.4) {
-      pts.push({ lat: lat, lon: -76.0 });
+    if (homeCountry === 'CA') {
+      // Bloquer raccourcis NY / VT / I-87 / I-81
+      for (lon = -76.4; lon <= -71.4; lon += 0.35) {
+        pts.push({ lat: 44.92, lon: lon });
+        pts.push({ lat: 44.55, lon: lon });
+      }
+      for (lat = 44.4; lat >= 42.7; lat -= 0.35) {
+        pts.push({ lat: lat, lon: -73.75 });
+        pts.push({ lat: lat, lon: -75.1 });
+      }
+      for (lat = 44.3; lat >= 43.0; lat -= 0.4) {
+        pts.push({ lat: lat, lon: -76.0 });
+      }
+    } else if (homeCountry === 'US') {
+      // Frontière Canada (côté sud) — Empêche US→US via QC/ON
+      for (lon = -123.5; lon <= -95.0; lon += 2.2) {
+        pts.push({ lat: 49.05, lon: lon });
+      }
+      for (lon = -95.0; lon <= -76.0; lon += 1.2) {
+        pts.push({ lat: 48.2, lon: lon });
+        pts.push({ lat: 46.5, lon: lon });
+      }
+      // Est : NY/VT vers Québec
+      for (lon = -76.2; lon <= -71.2; lon += 0.5) {
+        pts.push({ lat: 45.05, lon: lon });
+        pts.push({ lat: 45.35, lon: lon });
+      }
+      // Frontière Mexique (côté nord)
+      for (lon = -117.2; lon <= -98.0; lon += 1.1) {
+        pts.push({ lat: 32.35, lon: lon });
+        pts.push({ lat: 31.5, lon: lon });
+      }
+      for (lon = -106.5; lon <= -97.0; lon += 1.0) {
+        pts.push({ lat: 28.5, lon: lon });
+        pts.push({ lat: 26.2, lon: lon });
+      }
+    } else if (homeCountry === 'MX') {
+      // Frontière USA (côté sud) — Empêche MX→MX via Texas/Arizona/Californie
+      for (lon = -117.0; lon <= -97.5; lon += 1.0) {
+        pts.push({ lat: 32.45, lon: lon });
+        pts.push({ lat: 31.7, lon: lon });
+      }
+      for (lon = -106.8; lon <= -97.2; lon += 0.9) {
+        pts.push({ lat: 29.5, lon: lon });
+        pts.push({ lat: 27.8, lon: lon });
+      }
+      pts.push({ lat: 32.55, lon: -117.05 }); // Tijuana / San Diego
+      pts.push({ lat: 31.70, lon: -106.45 }); // Juárez / El Paso
+      pts.push({ lat: 27.50, lon: -99.50 });  // Laredo
+      pts.push({ lat: 25.95, lon: -97.45 });  // Brownsville / Matamoros
     }
     return pts.slice(0, 48);
   }
 
-  /** true si le tracé mentionne clairement un réseau US. */
+  /** @deprecated utiliser borderExcludeLocationsForDomestic('CA') */
+  function canadaUsBorderExcludeLocations() {
+    return borderExcludeLocationsForDomestic('CA');
+  }
+
+  /** true si le tracé mentionne clairement un réseau étranger. */
   function tripHasForeignHighwayNames(trip, homeCountry) {
     var blob = '';
     (trip.legs || []).forEach(function (leg) {
@@ -739,45 +781,70 @@
       });
     });
     if (homeCountry === 'CA') {
-      return /\b(I-8\d|I-9\d|I-87|I-90|I-81|I-88|I-95|Albany|Watertown|Syracuse|Buffalo|Plattsburgh|New York|Vermont|New Hampshire|Maine|NY |VT |NH |ME )\b/i.test(blob);
+      return /\b(I-8\d|I-9\d|I-87|I-90|I-81|I-88|I-95|Albany|Watertown|Syracuse|Buffalo|Plattsburgh|New York|Vermont|New Hampshire|Maine|NY |VT |NH |ME |México|Mexico|MEX-)\b/i.test(blob);
     }
     if (homeCountry === 'US') {
-      return /\b(Autoroute|Québec|Ontario|Highway 401|A-20|A-15|México|Mexico|MEX-)\b/i.test(blob);
+      return /\b(Autoroute|Québec|Ontario|Highway 401|Trans-Canada|A-20|A-15|A-40|México|Mexico|MEX-|Mexicali|Tijuana|Nuevo Laredo|Ciudad Juárez|Monterrey)\b/i.test(blob);
     }
     if (homeCountry === 'MX') {
-      return /\b(I-\d|Interstate|US |TX |AZ |CA )\b/i.test(blob);
+      return /\b(I-\d{1,3}\b|Interstate|US-|US |TX |AZ |NM |CA |Interstate|San Diego|El Paso|Laredo|Brownsville|McAllen)\b/i.test(blob);
     }
     return false;
   }
 
-  /** Points de passage domestiques pour forcer un corridor au pays (ex. QC→ON via 401). */
+  /** Points de passage domestiques pour forcer un corridor au pays. */
   function domesticViaCandidates(origin, dest) {
     if (!origin || !dest) return [];
     var oc = guessCountry(origin[0], origin[1]);
     var dc = guessCountry(dest[0], dest[1]);
     if (oc === 'other' || oc !== dc) return [];
-    var vias = [];
+    var corridor = [];
     if (oc === 'CA') {
-      var corridor = [
+      corridor = [
         [45.50, -73.57],
         [45.02, -74.73],
         [44.31, -76.55],
         [44.17, -77.38],
         [43.89, -78.86]
       ];
-      corridor.forEach(function (p) {
-        var minLon = Math.min(origin[1], dest[1]) - 0.4;
-        var maxLon = Math.max(origin[1], dest[1]) + 0.4;
-        var minLat = Math.min(origin[0], dest[0]) - 1.5;
-        var maxLat = Math.max(origin[0], dest[0]) + 1.5;
-        if (p[1] >= minLon && p[1] <= maxLon && p[0] >= minLat && p[0] <= maxLat) {
-          if (haversineM(origin[0], origin[1], p[0], p[1]) > 35000 &&
-              haversineM(dest[0], dest[1], p[0], p[1]) > 35000) {
-            vias.push(p);
-          }
-        }
-      });
+    } else if (oc === 'US') {
+      // Hubs Interstate pour rester aux USA (évite CA/MX)
+      corridor = [
+        [42.89, -78.88], // Buffalo
+        [41.50, -81.69], // Cleveland
+        [41.88, -87.63], // Chicago
+        [39.10, -94.58], // Kansas City
+        [32.78, -96.80], // Dallas
+        [35.23, -80.84], // Charlotte
+        [39.95, -75.17], // Philadelphia
+        [33.45, -112.07], // Phoenix
+        [36.17, -115.14]  // Las Vegas
+      ];
+    } else if (oc === 'MX') {
+      corridor = [
+        [32.53, -117.02], // Tijuana
+        [28.63, -106.07], // Chihuahua
+        [25.69, -100.32], // Monterrey
+        [22.16, -100.99], // San Luis Potosí
+        [21.12, -101.68], // León
+        [19.43, -99.13],  // CDMX
+        [20.67, -103.35], // Guadalajara
+        [19.05, -98.20]   // Puebla
+      ];
     }
+    var vias = [];
+    corridor.forEach(function (p) {
+      var minLon = Math.min(origin[1], dest[1]) - 1.5;
+      var maxLon = Math.max(origin[1], dest[1]) + 1.5;
+      var minLat = Math.min(origin[0], dest[0]) - 2.5;
+      var maxLat = Math.max(origin[0], dest[0]) + 2.5;
+      if (p[1] >= minLon && p[1] <= maxLon && p[0] >= minLat && p[0] <= maxLat) {
+        if (haversineM(origin[0], origin[1], p[0], p[1]) > 50000 &&
+            haversineM(dest[0], dest[1], p[0], p[1]) > 50000) {
+          vias.push(p);
+        }
+      }
+    });
     return vias;
   }
 
@@ -817,6 +884,7 @@
     routeLeavesCountry: routeLeavesCountry,
     domesticViaCandidates: domesticViaCandidates,
     canadaUsBorderExcludeLocations: canadaUsBorderExcludeLocations,
+    borderExcludeLocationsForDomestic: borderExcludeLocationsForDomestic,
     tripHasForeignHighwayNames: tripHasForeignHighwayNames,
     pointCountriesSame: pointCountriesSame
   };
