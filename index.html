@@ -1571,7 +1571,9 @@
     if (!block) return opts;
     block.use_tolls = routeOpts.avoidTolls ? 0 : 0.8;
     block.use_ferry = routeOpts.avoidFerries ? 0 : 0.5;
-    block.country_crossing_penalty = routeOpts.avoidBorders ? 5000 : 0;
+    // Valhalla truck ignore souvent ce pénalité → on filtre aussi côté app
+    block.country_crossing_penalty = routeOpts.avoidBorders ? 60000 : 0;
+    block.country_crossing_cost = routeOpts.avoidBorders ? 60000 : 0;
     return opts;
   }
 
@@ -1603,7 +1605,14 @@
     if (origin) pts.push(origin);
     waypoints.forEach((wp) => { if (wp && isFinite(wp.lat)) pts.push([wp.lat, wp.lon]); });
     if (destLatLng) pts.push(destLatLng);
-    const bbox = TruckNetwork.bboxFromPoints(pts, 0.08);
+    // Sur longue distance, pad réduit pour ne pas charger tout le Grand Montréal en exclusions
+    let pad = 0.08;
+    if (origin && destLatLng) {
+      const d = haversine(origin[0], origin[1], destLatLng[0], destLatLng[1]);
+      if (d > 120000) pad = 0.03;
+      if (d > 250000) pad = 0.02;
+    }
+    const bbox = TruckNetwork.bboxFromPoints(pts, pad);
     if (!bbox) return { forbidden: [], allowed: [], caution: [], all: [], sourcesUsed: [] };
     const net = await TruckNetwork.fetchNetworksForBbox(bbox);
     lastOfficialNet = net;
@@ -1697,65 +1706,126 @@
     });
 
     try {
+      const routeOpts = NavPro.getRouteOptions();
+      const stayDomestic = routeOpts.avoidBorders || TruckNetwork.pointCountriesSame(origin, destLatLng);
+      const longHaul = haversine(origin[0], origin[1], destLatLng[0], destLatLng[1]) > 120000;
+
       let excludePolygons = [];
       let net = null;
       let netInfo = '';
       try {
         net = await loadOfficialTruckNetworkForRoute();
         const useExclude = document.getElementById('net-exclude');
-        if ((!useExclude || useExclude.checked) && net.forbidden && net.forbidden.length) {
-          // 1re passe large
-          excludePolygons = TruckNetwork.buildExcludePolygons(net.forbidden, 40, null);
-          netInfo = net.forbidden.length + ' no-truck officiels';
+        // Sur longue distance / rester dans le pays : pas de 1re passe large
+        // (ça murait Montréal et forçait un détour USA ~6h30).
+        if ((!useExclude || useExclude.checked) && net.forbidden && net.forbidden.length && !longHaul) {
+          excludePolygons = TruckNetwork.buildExcludePolygons(net.forbidden, 25, null, true);
+          netInfo = net.forbidden.length + ' no-truck (bans totales priorisées)';
         } else if (net.sourcesUsed && net.sourcesUsed.length) {
-          netInfo = 'réseau ' + net.sourcesUsed.join('+') + ' chargé';
+          netInfo = 'réseau ' + net.sourcesUsed.join('+') + (longHaul ? ' · exclusions douces (long trajet)' : '');
         }
       } catch (netErr) {
         netInfo = 'réseau officiel indisponible (' + (netErr.message || netErr) + ')';
       }
       if (netInfo) routeNote.textContent = 'Calcul camion… ' + netInfo;
 
-      async function bestTruckTrip(excludes) {
+      function scoreTripCandidate(trip, usedExcludes) {
+        let score = scoreTruckFriendliness(trip);
+        const crossesUS = TruckNetwork.tripCrossesIntoCountry(trip, 'US');
+        if (stayDomestic && crossesUS) score -= 1e9;
+        if (routeOpts.avoidBorders && crossesUS) score -= 1e9;
+        // Préférer les trajets plus courts quand on reste domestique
+        if (stayDomestic && !crossesUS) score -= (trip.summary.length || 0) * 2;
+        if (usedExcludes) score += 30;
+        return score;
+      }
+
+      async function gatherTruckTrips(excludes) {
+        const mildOpts = applyAvoidOptions('truck', {
+          truck: Object.assign({}, truckBase, {
+            use_truck_route: stayDomestic ? 0.4 : 1,
+            low_class_factor: stayDomestic && longHaul ? 2.5 : truckBase.low_class_factor,
+            low_class_penalty: stayDomestic && longHaul ? 80 : truckBase.low_class_penalty,
+            service_factor: stayDomestic && longHaul ? 2 : truckBase.service_factor
+          })
+        });
         const results = await Promise.allSettled([
           fetchValhallaTrip('truck', truckOpts, excludes),
-          fetchValhallaTrip('truck', truckHwyOpts, excludes)
+          fetchValhallaTrip('truck', truckHwyOpts, excludes),
+          fetchValhallaTrip('truck', mildOpts, excludes),
+          // Toujours une option sans exclusions pour comparer (anti-détour frontière)
+          excludes && excludes.length
+            ? fetchValhallaTrip('truck', mildOpts, null)
+            : Promise.reject(new Error('skip'))
         ]);
         const scored = [];
-        results.forEach((r) => {
-          if (r.status === 'fulfilled' && r.value) scored.push(r.value);
+        results.forEach((r, idx) => {
+          if (r.status !== 'fulfilled' || !r.value) return;
+          const usedExcludes = !!(excludes && excludes.length && idx !== 3);
+          scored.push({ trip: r.value, usedExcludes, score: scoreTripCandidate(r.value, usedExcludes) });
         });
         if (!scored.length) {
-          throw new Error(results[0].reason?.message || results[1].reason?.message || 'itinéraire impossible');
+          throw new Error(results[0].reason?.message || 'itinéraire impossible');
         }
-        scored.sort((a, b) => scoreTruckFriendliness(b) - scoreTruckFriendliness(a));
-        return scored[0];
+        scored.sort((a, b) => b.score - a.score);
+        return scored;
       }
 
-      let trip = await bestTruckTrip(excludePolygons.length ? excludePolygons : null);
+      let ranked = await gatherTruckTrips(excludePolygons.length ? excludePolygons : null);
+      let best = ranked[0];
 
-      // 2e passe : exclure les no-truck réellement croisés par le tracé (ex. rue Clark)
-      if (net && net.forbidden && net.forbidden.length && document.getElementById('net-exclude')?.checked !== false) {
-        const draftCoords = tripCoords(trip);
-        const nearExcludes = TruckNetwork.buildExcludePolygons(net.forbidden, 70, draftCoords);
+      // Si le meilleur croise quand même les USA alors que le trajet doit rester au pays → forcer sans exclusions
+      if (stayDomestic && TruckNetwork.tripCrossesIntoCountry(best.trip, 'US')) {
+        routeNote.textContent = 'Détour USA détecté — recalcul pour rester au Canada…';
+        const domestic = ranked.filter((c) => !TruckNetwork.tripCrossesIntoCountry(c.trip, 'US'));
+        if (domestic.length) {
+          best = domestic[0];
+          netInfo = 'reste au Canada (évite détour USA)';
+        } else {
+          const retry = await gatherTruckTrips(null);
+          const domesticRetry = retry.filter((c) => !TruckNetwork.tripCrossesIntoCountry(c.trip, 'US'));
+          best = domesticRetry[0] || retry[0];
+          netInfo = domesticRetry.length
+            ? 'itinéraire canadien forcé'
+            : 'attention : Valhalla propose encore un passage frontière';
+        }
+      }
+
+      // 2e passe locale : seulement bans totales près du tracé (pas tout le code 3)
+      const useExclude = document.getElementById('net-exclude');
+      if (net && net.forbidden && net.forbidden.length && (!useExclude || useExclude.checked) &&
+          !TruckNetwork.tripCrossesIntoCountry(best.trip, 'US')) {
+        const draftCoords = tripCoords(best.trip);
+        const nearExcludes = TruckNetwork.buildExcludePolygons(net.forbidden, 35, draftCoords, !longHaul ? false : true);
         if (nearExcludes.length) {
-          routeNote.textContent = 'Recalcul en évitant ' + nearExcludes.length + ' segments no-truck sur le trajet…';
+          routeNote.textContent = 'Ajustement local no-truck (' + nearExcludes.length + ')…';
           try {
-            const improved = await bestTruckTrip(nearExcludes);
-            trip = improved;
-            excludePolygons = nearExcludes;
-            netInfo = nearExcludes.length + ' no-truck croisés évités';
-          } catch (e) {
-            // garde le 1er tracé si le recalcul échoue (accès destination)
-          }
+            const improved = await gatherTruckTrips(nearExcludes);
+            const ok = improved.find((c) => !stayDomestic || !TruckNetwork.tripCrossesIntoCountry(c.trip, 'US'));
+            if (ok && (!stayDomestic || !TruckNetwork.tripCrossesIntoCountry(ok.trip, 'US'))) {
+              // N'accepte l'amélioration que si elle ne rallonge pas abusivement
+              const baseKm = best.trip.summary.length || 0;
+              const newKm = ok.trip.summary.length || 0;
+              if (newKm <= baseKm * 1.25) {
+                best = ok;
+                excludePolygons = nearExcludes;
+                netInfo = nearExcludes.length + ' no-truck locaux évités';
+              }
+            }
+          } catch (e) { /* garde best */ }
         }
       }
 
-      let modeNote = excludePolygons.length
-        ? 'réseau officiel no-truck évité (MTQ/USDOT)'
-        : 'profil camion (évite hgv=no / rues locales)';
+      let trip = best.trip;
+      let modeNote = TruckNetwork.tripCrossesIntoCountry(trip, 'US')
+        ? 'passage USA (décoche « Frontières » ou vérifie le départ/arrivée)'
+        : (excludePolygons.length
+          ? 'camion Canada · no-truck locaux évités'
+          : 'profil camion');
+      if (routeOpts.avoidBorders) modeNote += ' · frontières évitées';
       const localKm = summarizeLocalStreetKm(trip);
       if (localKm > 1.5) {
-        modeNote += ' · ~' + localKm.toFixed(1) + ' km rues locales (accès / livraison)';
+        modeNote += ' · ~' + localKm.toFixed(1) + ' km rues locales (accès)';
       }
       if (netInfo) modeNote += ' · ' + netInfo;
 

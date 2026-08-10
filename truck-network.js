@@ -233,16 +233,29 @@
     return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   }
 
+  function estimateRingCircumferenceM(ring) {
+    var sum = 0;
+    for (var i = 0; i < ring.length - 1; i++) {
+      sum += haversineM(ring[i][1], ring[i][0], ring[i + 1][1], ring[i + 1][0]);
+    }
+    return sum;
+  }
+
   /**
    * Construit des polygones d'exclusion Valhalla à partir des segments interdits.
-   * Priorise interdit total (6) puis interdit livraison (3).
+   * Priorise interdit total (6). Cap circonférence totale < 90 km (limite Valhalla ~100 km).
    * Si routeCoords est fourni, ne garde que les no-truck proches du tracé.
+   * onlyTotalBan: si true, ignore « interdit sauf livraison » (évite de murer Montréal).
    */
-  function buildExcludePolygons(forbiddenFeatures, maxPolys, routeCoords) {
-    var limit = maxPolys || 55;
-    var ranked = (forbiddenFeatures || []).slice().sort(function (a, b) {
-      var wa = a.code === '6' ? 2 : 1;
-      var wb = b.code === '6' ? 2 : 1;
+  function buildExcludePolygons(forbiddenFeatures, maxPolys, routeCoords, onlyTotalBan) {
+    var limit = maxPolys || 40;
+    var maxCirc = 90000;
+    var ranked = (forbiddenFeatures || []).slice().filter(function (f) {
+      if (onlyTotalBan) return f.code === '6';
+      return f.role === 'forbidden';
+    }).sort(function (a, b) {
+      var wa = a.code === '6' ? 3 : 1;
+      var wb = b.code === '6' ? 3 : 1;
       return wb - wa;
     });
 
@@ -257,6 +270,7 @@
 
     var polys = [];
     var seen = {};
+    var totalCirc = 0;
     for (var i = 0; i < ranked.length && polys.length < limit; i++) {
       var f = ranked[i];
       var g = f.geometry;
@@ -269,7 +283,7 @@
       if (samples) {
         var near = false;
         for (var s = 0; s < samples.length; s++) {
-          if (haversineM(samples[s][0], samples[s][1], mid.lat, mid.lon) < 120) {
+          if (haversineM(samples[s][0], samples[s][1], mid.lat, mid.lon) < 90) {
             near = true;
             break;
           }
@@ -280,10 +294,64 @@
       var key = mid.lat.toFixed(4) + ',' + mid.lon.toFixed(4);
       if (seen[key]) continue;
       seen[key] = 1;
-      var half = f.code === '6' ? 0.0014 : 0.0011;
-      polys.push(squarePolygon(mid.lon, mid.lat, half));
+      var half = f.code === '6' ? 0.0009 : 0.0007;
+      var poly = squarePolygon(mid.lon, mid.lat, half);
+      var circ = estimateRingCircumferenceM(poly);
+      if (totalCirc + circ > maxCirc) break;
+      totalCirc += circ;
+      polys.push(poly);
     }
     return polys;
+  }
+
+  /** Estimation grossière du pays d'un point (CA / US / MX / other). */
+  function guessCountry(lat, lon) {
+    if (!isFinite(lat) || !isFinite(lon)) return 'other';
+    // Mexique
+    if (lat < 32.6 && lat > 14.5 && lon < -86.5 && lon > -117.5) return 'MX';
+    // Alaska
+    if (lat > 51 && lon < -130) return 'US';
+    // Frontière CA/US approximative (sud du Canada)
+    if (lat >= 41 && lat <= 49.5 && lon <= -67 && lon >= -125) {
+      // Sous ~45.0 entre Ontario/Québec/Maritimes → souvent US (NY/VT/NH/ME)
+      if (lat < 45.0 && lon > -76.5 && lon < -66.8) return 'US';
+      if (lat < 44.5 && lon <= -76.5 && lon > -83) return 'US';
+      // Contiguous US below 49th except already handled
+      if (lat < 49.0 && lon < -95) {
+        // prairie border ~49
+        if (lat < 48.95) return 'US';
+      }
+      if (lat < 49.0 && lon >= -95 && lon <= -66) {
+        // east of prairies: Canada if north of ~45 east of Detroit-ish, with exceptions
+        if (lon > -82 && lat >= 41.7 && lat < 43.5) return 'US'; // lower MI/NY etc rough
+        if (lat >= 45.0) return 'CA';
+        if (lat >= 42.9 && lon < -78.5 && lon > -83.5) return 'CA'; // tip of Ontario
+        if (lat < 45.0) return 'US';
+      }
+      return lat >= 45.0 ? 'CA' : 'US';
+    }
+    if (lat > 49 && lon < -52 && lon > -141) return 'CA';
+    if (lat > 24 && lat < 49.5 && lon < -66 && lon > -125) return 'US';
+    return 'other';
+  }
+
+  function tripCrossesIntoCountry(trip, countryCode) {
+    var hit = false;
+    (trip.legs || []).forEach(function (leg) {
+      (leg.maneuvers || []).forEach(function (m) {
+        var names = ((m.street_names || []).join(' '));
+        if (countryCode === 'US' && /\b(NY |VT |NH |ME |PA |US |I-|Interstate|State Route)/.test(names)) hit = true;
+        if (countryCode === 'MX' && /\b(México|Mexico|MEX-)\b/i.test(names)) hit = true;
+      });
+    });
+    return hit;
+  }
+
+  function pointCountriesSame(a, b) {
+    if (!a || !b) return false;
+    var ca = guessCountry(a[0], a[1]);
+    var cb = guessCountry(b[0], b[1]);
+    return ca !== 'other' && ca === cb;
   }
 
   function styleForRole(role) {
@@ -305,6 +373,9 @@
     styleForRole: styleForRole,
     likelyInQuebec: likelyInQuebec,
     likelyInUSA: likelyInUSA,
-    likelyInMexico: likelyInMexico
+    likelyInMexico: likelyInMexico,
+    guessCountry: guessCountry,
+    tripCrossesIntoCountry: tripCrossesIntoCountry,
+    pointCountriesSame: pointCountriesSame
   };
 })(typeof window !== 'undefined' ? window : this);
