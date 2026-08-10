@@ -1587,8 +1587,12 @@
     if (excludePolygons && excludePolygons.length) {
       body.exclude_polygons = excludePolygons;
     }
-    const url = VALHALLA_URL + '?json=' + encodeURIComponent(JSON.stringify(body));
-    const res = await fetch(url);
+    // POST : les exclude_polygons en GET dépassent souvent la limite d'URL (414)
+    const res = await fetch(VALHALLA_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify(body)
+    });
     const data = await res.json();
     if (!res.ok || data.error || !data.trip) {
       throw new Error((data && (data.error || data.error_message)) || 'itinéraire impossible');
@@ -1887,26 +1891,43 @@
         }
       }
 
-      // 4) Ajustement no-truck local (court trajet seulement, non bloquant)
+      // 4) Ajustement no-truck local : évite les rues interdites sauf sortie départ / entrée destination
       const useExclude = document.getElementById('net-exclude');
       if (!longHaul && net && net.forbidden && net.forbidden.length &&
           (!useExclude || useExclude.checked) && !crossesUS(best.trip)) {
         try {
-          const draftCoords = tripCoords(best.trip);
-          const nearExcludes = TruckNetwork.buildExcludePolygons(net.forbidden, 30, draftCoords, false);
-          if (nearExcludes.length) {
-            routeNote.textContent = 'Ajustement no-truck local…';
-            const improved = await gatherTruckTrips(nearExcludes);
+          const softPts = [origin, destLatLng].filter(Boolean);
+          let polys = [];
+          const baseKm = best.trip.summary.length || 0;
+          for (let round = 0; round < 3; round++) {
+            const draftCoords = tripCoords(best.trip);
+            const followed = typeof TruckNetwork.findFollowedForbidden === 'function'
+              ? TruckNetwork.findFollowedForbidden(net.forbidden, draftCoords, {
+                  softM: 200,
+                  ignoreNearPoints: softPts,
+                  minHits: 3
+                })
+              : [];
+            if (!followed.length) break;
+            routeNote.textContent = 'Évitement no-truck (passe ' + (round + 1) + ')…';
+            const before = polys.length;
+            polys = TruckNetwork.buildExcludePolygons(net.forbidden, 50, draftCoords, false, {
+              densify: true,
+              softM: 200,
+              ignoreNearPoints: softPts,
+              existing: polys,
+              halfDeg: 0.00125
+            });
+            if (polys.length === before) break;
+            const improved = await gatherTruckTrips(polys);
             const ok = improved.find((c) => !stayDomestic || !crossesUS(c.trip));
-            if (ok) {
-              const baseKm = best.trip.summary.length || 0;
-              const newKm = ok.trip.summary.length || 0;
-              if (newKm <= baseKm * 1.25 && (!stayDomestic || !crossesUS(ok.trip))) {
-                best = ok;
-                excludePolygons = nearExcludes;
-                netInfo = nearExcludes.length + ' no-truck locaux évités';
-              }
-            }
+            if (!ok) break;
+            const newKm = ok.trip.summary.length || 0;
+            // Accepter un détour raisonnable pour rester hors no-truck
+            if (newKm > Math.max(baseKm * 2.2, baseKm + 8)) break;
+            best = ok;
+            excludePolygons = polys;
+            netInfo = polys.length + ' exclusions no-truck · hors zones départ/arrivée';
           }
         } catch (e) { /* ignore adjustments */ }
       }

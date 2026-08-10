@@ -261,15 +261,192 @@
     return sum;
   }
 
+  function featureLineParts(geometry) {
+    if (!geometry) return [];
+    if (geometry.type === 'LineString') return [geometry.coordinates];
+    if (geometry.type === 'MultiLineString') return geometry.coordinates;
+    return [];
+  }
+
+  function densifyLatLonLine(lonLatParts, stepM) {
+    var step = stepM || 30;
+    var out = [];
+    (lonLatParts || []).forEach(function (part) {
+      if (!part || part.length < 2) return;
+      for (var i = 0; i < part.length - 1; i++) {
+        var a = part[i];
+        var b = part[i + 1];
+        var lat1 = a[1];
+        var lon1 = a[0];
+        var lat2 = b[1];
+        var lon2 = b[0];
+        out.push({ lat: lat1, lon: lon1 });
+        var d = haversineM(lat1, lon1, lat2, lon2);
+        var n = Math.max(1, Math.floor(d / step));
+        for (var k = 1; k < n; k++) {
+          var t = k / n;
+          out.push({
+            lat: lat1 + (lat2 - lat1) * t,
+            lon: lon1 + (lon2 - lon1) * t
+          });
+        }
+      }
+      var last = part[part.length - 1];
+      out.push({ lat: last[1], lon: last[0] });
+    });
+    return out;
+  }
+
+  function nearAny(lat, lon, points, maxM) {
+    if (!points || !points.length) return false;
+    for (var i = 0; i < points.length; i++) {
+      var p = points[i];
+      var plat = Array.isArray(p) ? p[0] : p.lat;
+      var plon = Array.isArray(p) ? p[1] : p.lon;
+      if (haversineM(lat, lon, plat, plon) <= maxM) return true;
+    }
+    return false;
+  }
+
+  /**
+   * Segments no-truck que l'itinéraire SUIT (pas seulement croise).
+   * Ignore une zone souple autour du départ / arrivée (sortie / entrée obligatoire).
+   */
+  function findFollowedForbidden(forbiddenFeatures, routeCoords, opts) {
+    var options = opts || {};
+    var softM = options.softM == null ? 200 : options.softM;
+    var minHits = options.minHits || 3;
+    var matchM = options.matchM || 20;
+    var ignoreNear = options.ignoreNearPoints || [];
+    var samples = [];
+    var route = routeCoords || [];
+    var step = Math.max(1, Math.floor(route.length / 120));
+    for (var i = 0; i < route.length; i += step) samples.push(route[i]);
+    if (route.length) samples.push(route[route.length - 1]);
+
+    var followed = [];
+    (forbiddenFeatures || []).forEach(function (f) {
+      if (!f || f.role !== 'forbidden') return;
+      var parts = featureLineParts(f.geometry);
+      if (!parts.length) return;
+      var dens = densifyLatLonLine(parts, 25);
+      var hits = 0;
+      var nearPts = [];
+      for (var s = 0; s < samples.length; s++) {
+        var pt = samples[s];
+        if (nearAny(pt[0], pt[1], ignoreNear, softM)) continue;
+        for (var d = 0; d < dens.length; d++) {
+          if (haversineM(pt[0], pt[1], dens[d].lat, dens[d].lon) <= matchM) {
+            hits += 1;
+            nearPts.push(dens[d]);
+            break;
+          }
+        }
+      }
+      if (hits >= minHits) {
+        followed.push({
+          feature: f,
+          hits: hits,
+          name: f.name || f.label || '',
+          nearPts: nearPts
+        });
+      }
+    });
+    followed.sort(function (a, b) { return b.hits - a.hits; });
+    return followed;
+  }
+
   /**
    * Construit des polygones d'exclusion Valhalla à partir des segments interdits.
    * Priorise interdit total (6). Cap circonférence totale < 90 km (limite Valhalla ~100 km).
-   * Si routeCoords est fourni, ne garde que les no-truck proches du tracé.
-   * onlyTotalBan: si true, ignore « interdit sauf livraison » (évite de murer Montréal).
+   *
+   * options:
+   * - routeCoords: ne cible que le voisinage du tracé
+   * - onlyTotalBan: ignore « interdit sauf livraison »
+   * - ignoreNearPoints: [[lat,lon],…] zone souple départ/arrivée
+   * - softM: rayon zone souple (défaut 200 m)
+   * - densify: place plusieurs carrés le long du segment suivi (défaut true si routeCoords)
+   * - existing: polygones déjà accumulés (itérations)
    */
-  function buildExcludePolygons(forbiddenFeatures, maxPolys, routeCoords, onlyTotalBan) {
-    var limit = maxPolys || 40;
-    var maxCirc = 90000;
+  function buildExcludePolygons(forbiddenFeatures, maxPolys, routeCoords, onlyTotalBan, options) {
+    var opts = options || {};
+    if (typeof onlyTotalBan === 'object' && onlyTotalBan && !options) {
+      opts = onlyTotalBan;
+      onlyTotalBan = !!opts.onlyTotalBan;
+    }
+    var limit = maxPolys || 45;
+    var maxCirc = opts.maxCirc || 88000;
+    var softM = opts.softM == null ? 200 : opts.softM;
+    var ignoreNear = opts.ignoreNearPoints || [];
+    var densify = opts.densify != null ? !!opts.densify : !!(routeCoords && routeCoords.length);
+    var halfDefault = opts.halfDeg || 0.0012;
+
+    var polys = (opts.existing || []).slice();
+    var seen = {};
+    var totalCirc = 0;
+    polys.forEach(function (poly) {
+      if (!poly || !poly.length) return;
+      var lat = (poly[0][1] + poly[2][1]) / 2;
+      var lon = (poly[0][0] + poly[2][0]) / 2;
+      seen[lat.toFixed(4) + ',' + lon.toFixed(4)] = 1;
+      totalCirc += estimateRingCircumferenceM(poly);
+    });
+
+    var samples = null;
+    if (routeCoords && routeCoords.length) {
+      samples = [];
+      for (var i = 0; i < routeCoords.length; i += Math.max(1, Math.floor(routeCoords.length / 100))) {
+        samples.push(routeCoords[i]);
+      }
+      samples.push(routeCoords[routeCoords.length - 1]);
+    }
+
+    function tryAdd(lat, lon, half) {
+      if (nearAny(lat, lon, ignoreNear, softM)) return false;
+      var key = lat.toFixed(4) + ',' + lon.toFixed(4);
+      if (seen[key]) return false;
+      if (samples) {
+        var nearRoute = false;
+        for (var s = 0; s < samples.length; s++) {
+          if (haversineM(samples[s][0], samples[s][1], lat, lon) < 55) {
+            nearRoute = true;
+            break;
+          }
+        }
+        if (!nearRoute) return false;
+      }
+      var poly = squarePolygon(lon, lat, half);
+      var circ = estimateRingCircumferenceM(poly);
+      if (totalCirc + circ > maxCirc || polys.length >= limit) return false;
+      seen[key] = 1;
+      totalCirc += circ;
+      polys.push(poly);
+      return true;
+    }
+
+    // Mode ciblé : segments réellement suivis par le tracé
+    if (densify && routeCoords && routeCoords.length) {
+      var followed = findFollowedForbidden(forbiddenFeatures, routeCoords, {
+        softM: softM,
+        ignoreNearPoints: ignoreNear,
+        minHits: opts.minHits || 3,
+        matchM: opts.matchM || 20
+      });
+      for (var fi = 0; fi < followed.length && polys.length < limit; fi++) {
+        var seg = followed[fi];
+        var last = null;
+        var half = (seg.feature && seg.feature.code === '6') ? halfDefault * 1.1 : halfDefault;
+        for (var pi = 0; pi < seg.nearPts.length; pi++) {
+          var p = seg.nearPts[pi];
+          if (last && haversineM(p.lat, p.lon, last.lat, last.lon) < 55) continue;
+          if (tryAdd(p.lat, p.lon, half)) last = p;
+          if (polys.length >= limit) break;
+        }
+      }
+      return polys;
+    }
+
+    // Mode legacy : un carré au milieu de chaque segment interdit proche
     var ranked = (forbiddenFeatures || []).slice().filter(function (f) {
       if (onlyTotalBan) return f.code === '6';
       return f.role === 'forbidden';
@@ -279,47 +456,13 @@
       return wb - wa;
     });
 
-    var samples = null;
-    if (routeCoords && routeCoords.length) {
-      samples = [];
-      for (var i = 0; i < routeCoords.length; i += Math.max(1, Math.floor(routeCoords.length / 80))) {
-        samples.push(routeCoords[i]);
-      }
-      samples.push(routeCoords[routeCoords.length - 1]);
-    }
-
-    var polys = [];
-    var seen = {};
-    var totalCirc = 0;
     for (var i = 0; i < ranked.length && polys.length < limit; i++) {
       var f = ranked[i];
-      var g = f.geometry;
-      if (!g) continue;
-      var coords = g.type === 'MultiLineString' ? g.coordinates : g.type === 'LineString' ? [g.coordinates] : null;
-      if (!coords) continue;
-      var mid = midOfLine(coords);
+      var parts = featureLineParts(f.geometry);
+      if (!parts.length) continue;
+      var mid = midOfLine(parts);
       if (!mid) continue;
-
-      if (samples) {
-        var near = false;
-        for (var s = 0; s < samples.length; s++) {
-          if (haversineM(samples[s][0], samples[s][1], mid.lat, mid.lon) < 90) {
-            near = true;
-            break;
-          }
-        }
-        if (!near) continue;
-      }
-
-      var key = mid.lat.toFixed(4) + ',' + mid.lon.toFixed(4);
-      if (seen[key]) continue;
-      seen[key] = 1;
-      var half = f.code === '6' ? 0.0009 : 0.0007;
-      var poly = squarePolygon(mid.lon, mid.lat, half);
-      var circ = estimateRingCircumferenceM(poly);
-      if (totalCirc + circ > maxCirc) break;
-      totalCirc += circ;
-      polys.push(poly);
+      tryAdd(mid.lat, mid.lon, f.code === '6' ? 0.0009 : 0.0007);
     }
     return polys;
   }
@@ -390,6 +533,7 @@
     fetchUSNationalNetwork: fetchUSNationalNetwork,
     fetchNetworksForBbox: fetchNetworksForBbox,
     buildExcludePolygons: buildExcludePolygons,
+    findFollowedForbidden: findFollowedForbidden,
     styleForRole: styleForRole,
     likelyInQuebec: likelyInQuebec,
     likelyInUSA: likelyInUSA,
