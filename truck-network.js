@@ -708,6 +708,48 @@
     return foreign >= 2 || (total > 0 && foreign / total >= 0.08);
   }
 
+  /** Points à exclure le long de la frontière US (max Valhalla ~50) pour trajets CA→CA. */
+  function canadaUsBorderExcludeLocations() {
+    var pts = [];
+    var lon;
+    // Bande sud du Québec / Est Ontario → NY / VT
+    for (lon = -76.4; lon <= -71.4; lon += 0.35) {
+      pts.push({ lat: 44.92, lon: lon });
+      pts.push({ lat: 44.55, lon: lon });
+    }
+    // Couloir Albany / I-87
+    var lat;
+    for (lat = 44.4; lat >= 42.7; lat -= 0.35) {
+      pts.push({ lat: lat, lon: -73.75 });
+      pts.push({ lat: lat, lon: -75.1 });
+    }
+    // Couloir I-81 Est NY
+    for (lat = 44.3; lat >= 43.0; lat -= 0.4) {
+      pts.push({ lat: lat, lon: -76.0 });
+    }
+    return pts.slice(0, 48);
+  }
+
+  /** true si le tracé mentionne clairement un réseau US. */
+  function tripHasForeignHighwayNames(trip, homeCountry) {
+    var blob = '';
+    (trip.legs || []).forEach(function (leg) {
+      (leg.maneuvers || []).forEach(function (m) {
+        blob += ' ' + ((m.street_names || []).join(' '));
+      });
+    });
+    if (homeCountry === 'CA') {
+      return /\b(I-8\d|I-9\d|I-87|I-90|I-81|I-88|I-95|Albany|Watertown|Syracuse|Buffalo|Plattsburgh|New York|Vermont|New Hampshire|Maine|NY |VT |NH |ME )\b/i.test(blob);
+    }
+    if (homeCountry === 'US') {
+      return /\b(Autoroute|Québec|Ontario|Highway 401|A-20|A-15|México|Mexico|MEX-)\b/i.test(blob);
+    }
+    if (homeCountry === 'MX') {
+      return /\b(I-\d|Interstate|US |TX |AZ |CA )\b/i.test(blob);
+    }
+    return false;
+  }
+
   /** Points de passage domestiques pour forcer un corridor au pays (ex. QC→ON via 401). */
   function domesticViaCandidates(origin, dest) {
     if (!origin || !dest) return [];
@@ -716,7 +758,6 @@
     if (oc === 'other' || oc !== dc) return [];
     var vias = [];
     if (oc === 'CA') {
-      // Corridor Est : Montréal → Cornwall → Kingston → Belleville → Oshawa
       var corridor = [
         [45.50, -73.57],
         [45.02, -74.73],
@@ -725,15 +766,13 @@
         [43.89, -78.86]
       ];
       corridor.forEach(function (p) {
-        // garder les vias grosso modo entre lon origine/destination
-        var minLon = Math.min(origin[1], dest[1]) - 0.3;
-        var maxLon = Math.max(origin[1], dest[1]) + 0.3;
-        var minLat = Math.min(origin[0], dest[0]) - 1.2;
-        var maxLat = Math.max(origin[0], dest[0]) + 1.2;
+        var minLon = Math.min(origin[1], dest[1]) - 0.4;
+        var maxLon = Math.max(origin[1], dest[1]) + 0.4;
+        var minLat = Math.min(origin[0], dest[0]) - 1.5;
+        var maxLat = Math.max(origin[0], dest[0]) + 1.5;
         if (p[1] >= minLon && p[1] <= maxLon && p[0] >= minLat && p[0] <= maxLat) {
-          // pas trop près des extrémités
-          if (haversineM(origin[0], origin[1], p[0], p[1]) > 40000 &&
-              haversineM(dest[0], dest[1], p[0], p[1]) > 40000) {
+          if (haversineM(origin[0], origin[1], p[0], p[1]) > 35000 &&
+              haversineM(dest[0], dest[1], p[0], p[1]) > 35000) {
             vias.push(p);
           }
         }
@@ -777,6 +816,8 @@
     tripCrossesIntoCountry: tripCrossesIntoCountry,
     routeLeavesCountry: routeLeavesCountry,
     domesticViaCandidates: domesticViaCandidates,
+    canadaUsBorderExcludeLocations: canadaUsBorderExcludeLocations,
+    tripHasForeignHighwayNames: tripHasForeignHighwayNames,
     pointCountriesSame: pointCountriesSame
   };
 })(typeof window !== 'undefined' ? window : this);
