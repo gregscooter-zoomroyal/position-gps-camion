@@ -842,6 +842,18 @@
       </div>
       <div class="truck-note" id="truck-note">Zoome au niveau rue pour voir les zones camion et les ponts bas (données OpenStreetMap).</div>
 
+      <div class="panel-title">Réseau camion officiel (CA / US / MX)</div>
+      <div class="check-list">
+        <label><input type="checkbox" id="net-official" checked> Afficher réseau officiel</label>
+        <label><input type="checkbox" id="net-exclude" checked> Éviter no-truck officiels à l'itinéraire</label>
+      </div>
+      <div class="truck-legend">
+        <div><span class="swatch" style="background:#4ADE80;"></span>Transit / National Network</div>
+        <div><span class="swatch" style="background:#FFB238;"></span>Restreint / partiel</div>
+        <div><span class="swatch" style="background:#FF3B3B;"></span>Interdit (no truck)</div>
+      </div>
+      <div class="truck-note" id="net-note">Données MTQ Québec + USDOT National Network. MX : INEGI RNC (lien dans Pro).</div>
+
       <div class="panel-title">Points d'intérêt camion</div>
       <div class="check-list">
         <label><input type="checkbox" id="poi-fuel"> Stations-service</label>
@@ -905,6 +917,9 @@
       <div class="check-list">
         <label><input type="checkbox" id="opt-bridge-notify" checked> Alerter à l'approche d'un pont bas</label>
       </div>
+
+      <div class="panel-title">Cartes officielles no-truck</div>
+      <div id="truck-sources-list" class="truck-note">Chargement des sources…</div>
     </div>
 
   </div>
@@ -935,6 +950,7 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="./nav-pro.js"></script>
+<script src="./truck-network.js"></script>
 <script>
   // Profil véhicule (Navigation Pro) — comptes reportés à plus tard
   let TRUCK = Object.assign({ hazmat: false }, NavPro.getActiveVehicleProfile());
@@ -1559,13 +1575,16 @@
     return opts;
   }
 
-  async function fetchValhallaTrip(costing, costingOptions){
+  async function fetchValhallaTrip(costing, costingOptions, excludePolygons){
     const body = {
       locations: buildRouteLocations(),
       costing,
       costing_options: costingOptions,
       directions_options: { units: 'kilometers', language: 'fr-FR' }
     };
+    if (excludePolygons && excludePolygons.length) {
+      body.exclude_polygons = excludePolygons;
+    }
     const url = VALHALLA_URL + '?json=' + encodeURIComponent(JSON.stringify(body));
     const res = await fetch(url);
     const data = await res.json();
@@ -1573,6 +1592,63 @@
       throw new Error((data && (data.error || data.error_message)) || 'itinéraire impossible');
     }
     return data.trip;
+  }
+
+  let officialNetLayer = null;
+  let lastOfficialNet = null;
+
+  async function loadOfficialTruckNetworkForRoute(){
+    const pts = [];
+    const origin = currentOrigin();
+    if (origin) pts.push(origin);
+    waypoints.forEach((wp) => { if (wp && isFinite(wp.lat)) pts.push([wp.lat, wp.lon]); });
+    if (destLatLng) pts.push(destLatLng);
+    const bbox = TruckNetwork.bboxFromPoints(pts, 0.08);
+    if (!bbox) return { forbidden: [], allowed: [], caution: [], all: [], sourcesUsed: [] };
+    const net = await TruckNetwork.fetchNetworksForBbox(bbox);
+    lastOfficialNet = net;
+    renderOfficialTruckNetwork(net);
+    return net;
+  }
+
+  function renderOfficialTruckNetwork(net){
+    if (officialNetLayer) { map.removeLayer(officialNetLayer); officialNetLayer = null; }
+    const enabled = document.getElementById('net-official');
+    if (enabled && !enabled.checked) {
+      const note = document.getElementById('net-note');
+      if (note) note.textContent = 'Affichage du réseau officiel désactivé.';
+      return;
+    }
+    if (!net || !net.all || !net.all.length) return;
+    officialNetLayer = L.layerGroup().addTo(map);
+    // Limiter le dessin pour rester fluide
+    const drawList = []
+      .concat(net.forbidden.slice(0, 1200))
+      .concat(net.caution.slice(0, 400))
+      .concat(net.allowed.slice(0, 800));
+    drawList.forEach((seg) => {
+      const g = seg.geometry;
+      if (!g) return;
+      const parts = g.type === 'MultiLineString' ? g.coordinates
+        : g.type === 'LineString' ? [g.coordinates] : [];
+      const style = Object.assign({ pane: 'truckPane' }, TruckNetwork.styleForRole(seg.role));
+      parts.forEach((line) => {
+        const latlngs = line.map((c) => [c[1], c[0]]);
+        if (latlngs.length < 2) return;
+        L.polyline(latlngs, style)
+          .bindPopup('<strong>' + (seg.name || seg.label) + '</strong><br>' +
+            seg.label + (seg.city ? '<br>' + seg.city : '') +
+            '<br><span style="opacity:.7">' + seg.source + '</span>')
+          .addTo(officialNetLayer);
+      });
+    });
+    const note = document.getElementById('net-note');
+    if (note) {
+      note.textContent = (net.sourcesUsed.join(' + ') || 'aucune source') +
+        ' · ' + net.allowed.length + ' transit · ' +
+        net.caution.length + ' restreint · ' +
+        net.forbidden.length + ' no-truck';
+    }
   }
 
   async function calculateTruckRoute(){
@@ -1586,8 +1662,7 @@
     routeLoading = true;
     routeCalcBtn.disabled = true;
     routeCalcBtn.textContent = 'Calcul camion…';
-    routeNote.textContent = 'Calcul d\'un itinéraire poids lourd (préférence autoroutes, ponts < ' +
-      TRUCK.height.toFixed(2).replace('.', ',') + ' m)…';
+    routeNote.textContent = 'Chargement du réseau camion officiel (CA/US) + calcul PL…';
 
     // Profil PL strict : ne jamais préférer « auto » (ignore hgv=no / rues interdites).
     const truckBase = {
@@ -1606,42 +1681,83 @@
       country_crossing_penalty: 0,
       hgv_no_access_penalty: 43200,
       use_truck_route: 1,
-      low_class_factor: 4,
-      low_class_penalty: 180,
-      service_factor: 4,
-      service_penalty: 120
+      low_class_factor: 5,
+      low_class_penalty: 220,
+      service_factor: 5,
+      service_penalty: 150
     };
     const truckOpts = applyAvoidOptions('truck', { truck: Object.assign({}, truckBase) });
-    // Variante encore plus autoroutière (toujours en costing truck)
     const truckHwyOpts = applyAvoidOptions('truck', {
       truck: Object.assign({}, truckBase, {
         use_highways: 1,
-        low_class_factor: 6,
-        low_class_penalty: 300,
+        low_class_factor: 8,
+        low_class_penalty: 400,
         use_truck_route: 1
       })
     });
 
     try {
-      const results = await Promise.allSettled([
-        fetchValhallaTrip('truck', truckOpts),
-        fetchValhallaTrip('truck', truckHwyOpts)
-      ]);
+      let excludePolygons = [];
+      let net = null;
+      let netInfo = '';
+      try {
+        net = await loadOfficialTruckNetworkForRoute();
+        const useExclude = document.getElementById('net-exclude');
+        if ((!useExclude || useExclude.checked) && net.forbidden && net.forbidden.length) {
+          // 1re passe large
+          excludePolygons = TruckNetwork.buildExcludePolygons(net.forbidden, 40, null);
+          netInfo = net.forbidden.length + ' no-truck officiels';
+        } else if (net.sourcesUsed && net.sourcesUsed.length) {
+          netInfo = 'réseau ' + net.sourcesUsed.join('+') + ' chargé';
+        }
+      } catch (netErr) {
+        netInfo = 'réseau officiel indisponible (' + (netErr.message || netErr) + ')';
+      }
+      if (netInfo) routeNote.textContent = 'Calcul camion… ' + netInfo;
 
-      const candidates = results
-        .filter((r) => r.status === 'fulfilled' && r.value)
-        .map((r) => r.value);
-      if (!candidates.length) {
-        throw new Error(results[0].reason?.message || results[1].reason?.message || 'itinéraire impossible');
+      async function bestTruckTrip(excludes) {
+        const results = await Promise.allSettled([
+          fetchValhallaTrip('truck', truckOpts, excludes),
+          fetchValhallaTrip('truck', truckHwyOpts, excludes)
+        ]);
+        const scored = [];
+        results.forEach((r) => {
+          if (r.status === 'fulfilled' && r.value) scored.push(r.value);
+        });
+        if (!scored.length) {
+          throw new Error(results[0].reason?.message || results[1].reason?.message || 'itinéraire impossible');
+        }
+        scored.sort((a, b) => scoreTruckFriendliness(b) - scoreTruckFriendliness(a));
+        return scored[0];
       }
 
-      candidates.sort((a, b) => scoreTruckFriendliness(b) - scoreTruckFriendliness(a));
-      let trip = candidates[0];
-      let modeNote = 'profil camion (évite hgv=no / rues locales)';
+      let trip = await bestTruckTrip(excludePolygons.length ? excludePolygons : null);
+
+      // 2e passe : exclure les no-truck réellement croisés par le tracé (ex. rue Clark)
+      if (net && net.forbidden && net.forbidden.length && document.getElementById('net-exclude')?.checked !== false) {
+        const draftCoords = tripCoords(trip);
+        const nearExcludes = TruckNetwork.buildExcludePolygons(net.forbidden, 70, draftCoords);
+        if (nearExcludes.length) {
+          routeNote.textContent = 'Recalcul en évitant ' + nearExcludes.length + ' segments no-truck sur le trajet…';
+          try {
+            const improved = await bestTruckTrip(nearExcludes);
+            trip = improved;
+            excludePolygons = nearExcludes;
+            netInfo = nearExcludes.length + ' no-truck croisés évités';
+          } catch (e) {
+            // garde le 1er tracé si le recalcul échoue (accès destination)
+          }
+        }
+      }
+
+      let modeNote = excludePolygons.length
+        ? 'réseau officiel no-truck évité (MTQ/USDOT)'
+        : 'profil camion (évite hgv=no / rues locales)';
       const localKm = summarizeLocalStreetKm(trip);
       if (localKm > 1.5) {
-        modeNote += ' · attention : ~' + localKm.toFixed(1) + ' km de rues locales (accès destination)';
+        modeNote += ' · ~' + localKm.toFixed(1) + ' km rues locales (accès / livraison)';
       }
+      if (netInfo) modeNote += ' · ' + netInfo;
 
       const allCoords = tripCoords(trip);
       if (allCoords.length < 2) throw new Error('tracé vide');
@@ -2654,6 +2770,58 @@
   renderHistory();
   renderWaypoints();
   try { NavPro.registerServiceWorker('./sw.js'); } catch (e) { /* ignore */ }
+
+  // Sources officielles CA/US/MX
+  (function renderTruckSources(){
+    const box = document.getElementById('truck-sources-list');
+    if (!box || !window.TruckNetwork) return;
+    box.innerHTML = TruckNetwork.SOURCES.map((s) => {
+      const mapLink = s.map ? '<a href="' + s.map + '" target="_blank" rel="noopener" style="color:var(--amber)">' + s.name + '</a>' : s.name;
+      const dataLink = s.data ? ' · <a href="' + s.data + '" target="_blank" rel="noopener" style="color:var(--blue)">données</a>' : '';
+      return '<div style="margin-bottom:8px"><strong>' + s.country + '</strong> — ' + mapLink + dataLink +
+        '<br><span style="opacity:.8">' + s.note + '</span></div>';
+    }).join('');
+  })();
+
+  ['net-official', 'net-exclude'].forEach((id) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('change', () => {
+      if (id === 'net-official' && lastOfficialNet) renderOfficialTruckNetwork(lastOfficialNet);
+      if (id === 'net-exclude') maybeAutoRoute();
+    });
+  });
+
+  // Précharge le réseau officiel pour la vue carte (Québec par défaut)
+  (async function preloadNet(){
+    try {
+      const b = {
+        south: map.getBounds().getSouth(),
+        west: map.getBounds().getWest(),
+        north: map.getBounds().getNorth(),
+        east: map.getBounds().getEast()
+      };
+      if ((b.north - b.south) > 3 || (b.east - b.west) > 3) return;
+      const net = await TruckNetwork.fetchNetworksForBbox(b);
+      lastOfficialNet = net;
+      renderOfficialTruckNetwork(net);
+    } catch (e) { /* ignore */ }
+  })();
+  map.on('moveend', debounce(async () => {
+    if (!document.getElementById('net-official')?.checked) return;
+    if (map.getZoom() < 10) return;
+    try {
+      const b = {
+        south: map.getBounds().getSouth(),
+        west: map.getBounds().getWest(),
+        north: map.getBounds().getNorth(),
+        east: map.getBounds().getEast()
+      };
+      const net = await TruckNetwork.fetchNetworksForBbox(b);
+      lastOfficialNet = net;
+      renderOfficialTruckNetwork(net);
+    } catch (e) { /* ignore */ }
+  }, 900));
 
 
   // Onglets style Google / Waze
