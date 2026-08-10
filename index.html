@@ -1495,8 +1495,8 @@
     return allCoords;
   }
 
-  // Score : favorise autoroutes (A-10, A-35…) et pénalise rangs / rues locales
-  function scoreHighwayPreference(trip){
+  // Score camion : favorise voies PL / autoroutes, pénalise rues locales / rangs
+  function scoreTruckFriendliness(trip){
     let score = 0;
     (trip.legs || []).forEach((leg) => {
       (leg.maneuvers || []).forEach((m) => {
@@ -1504,23 +1504,37 @@
         const names = (m.street_names || []).map(n => String(n).toLowerCase());
         const joined = names.join(' ');
 
-        if (m.highway) score += len * 12;
-
-        // Autoroutes / routes numérotées majeures Québec / NA
-        if (names.some(n => /^(a-?)?\d{1,3}(\s|$)/i.test(n) || n === '10' || n === '35' || n === '15' || n === '20' || n === '40' || n === '55' || n === '73')) {
-          score += len * 8;
+        if (m.highway) score += len * 14;
+        if (names.some(n => /^(a-?)?\d{1,3}(\s|$)/i.test(n) || /^(i|us|hwy|route|rt)\s*-?\s*\d+/i.test(n))) {
+          score += len * 10;
         }
-        if (/autoroute|freeway|interstate|expressway|highway/.test(joined)) score += len * 10;
+        if (/autoroute|freeway|interstate|expressway|highway|boulevard|parkway/.test(joined)) score += len * 8;
+        if (/truck\s*route|voie\s*camion|hgv/.test(joined)) score += len * 16;
 
-        // Pénalité forte pour détours type rang / route locale
-        if (/^rang\b|\brang\b/.test(joined)) score -= len * 25;
-        if (!m.highway && /\brue\b|\bavenue\b|\bboulevard\b|\bchemin\b/.test(joined)) score -= len * 4;
-        if (/\blongueuil\b|\bbrossard\b|\blaval\b/.test(joined)) score -= len * 15;
+        if (/^rang\b|\brang\b/.test(joined)) score -= len * 30;
+        if (/\brue\b|\bavenue\b|\bruelle\b|\bcrescent\b|\bcourt\b|\bplace\b/.test(joined) && !m.highway) {
+          score -= len * 12;
+        }
+        if (/\brésidentiel|residential|quartier/.test(joined)) score -= len * 20;
       });
     });
-    // Léger bonus au temps plus court, sans écraser le choix autoroutier
-    score -= (trip.summary.time || 0) * 0.002;
+    score -= (trip.summary.time || 0) * 0.001;
+    score -= (trip.summary.length || 0) * 0.5;
     return score;
+  }
+
+  function summarizeLocalStreetKm(trip){
+    let localKm = 0;
+    (trip.legs || []).forEach((leg) => {
+      (leg.maneuvers || []).forEach((m) => {
+        if (m.highway) return;
+        const joined = ((m.street_names || []).join(' ')).toLowerCase();
+        if (/\brue\b|\bavenue\b|\bruelle\b|\bcrescent\b|\brang\b/.test(joined)) {
+          localKm += m.length || 0;
+        }
+      });
+    });
+    return localKm;
   }
 
   function buildRouteLocations(){
@@ -1575,62 +1589,58 @@
     routeNote.textContent = 'Calcul d\'un itinéraire poids lourd (préférence autoroutes, ponts < ' +
       TRUCK.height.toFixed(2).replace('.', ',') + ' m)…';
 
-    const truckOpts = applyAvoidOptions('truck', {
-      truck: {
-        height: TRUCK.height,
-        width: TRUCK.width,
-        length: TRUCK.length,
-        weight: TRUCK.weight,
-        axle_load: TRUCK.axle_load,
-        axle_count: TRUCK.axle_count,
-        hazmat: TRUCK.hazmat,
+    // Profil PL strict : ne jamais préférer « auto » (ignore hgv=no / rues interdites).
+    const truckBase = {
+      height: TRUCK.height,
+      width: TRUCK.width,
+      length: TRUCK.length,
+      weight: TRUCK.weight,
+      axle_load: TRUCK.axle_load,
+      axle_count: TRUCK.axle_count,
+      hazmat: TRUCK.hazmat,
+      use_highways: 1,
+      use_tolls: 0.8,
+      use_tracks: 0,
+      use_living_streets: 0,
+      use_ferry: 0,
+      country_crossing_penalty: 0,
+      hgv_no_access_penalty: 43200,
+      use_truck_route: 1,
+      low_class_factor: 4,
+      low_class_penalty: 180,
+      service_factor: 4,
+      service_penalty: 120
+    };
+    const truckOpts = applyAvoidOptions('truck', { truck: Object.assign({}, truckBase) });
+    // Variante encore plus autoroutière (toujours en costing truck)
+    const truckHwyOpts = applyAvoidOptions('truck', {
+      truck: Object.assign({}, truckBase, {
         use_highways: 1,
-        use_tolls: 0.8,
-        use_tracks: 0,
-        use_living_streets: 0,
-        use_ferry: 0,
-        country_crossing_penalty: 0
-      }
-    });
-    const autoOpts = applyAvoidOptions('auto', {
-      auto: {
-        use_highways: 1,
-        use_tolls: 0.8,
-        use_tracks: 0,
-        use_living_streets: 0,
-        use_ferry: 0,
-        shortest: false
-      }
+        low_class_factor: 6,
+        low_class_penalty: 300,
+        use_truck_route: 1
+      })
     });
 
     try {
-      // Valhalla « truck » évite parfois des autoroutes camion-légales (ex. A-35)
-      // → on compare avec un tracé autoroutier et on garde le plus logique.
       const results = await Promise.allSettled([
         fetchValhallaTrip('truck', truckOpts),
-        fetchValhallaTrip('auto', autoOpts)
+        fetchValhallaTrip('truck', truckHwyOpts)
       ]);
 
-      const truckTrip = results[0].status === 'fulfilled' ? results[0].value : null;
-      const autoTrip = results[1].status === 'fulfilled' ? results[1].value : null;
-      if (!truckTrip && !autoTrip) {
+      const candidates = results
+        .filter((r) => r.status === 'fulfilled' && r.value)
+        .map((r) => r.value);
+      if (!candidates.length) {
         throw new Error(results[0].reason?.message || results[1].reason?.message || 'itinéraire impossible');
       }
 
-      let trip = truckTrip || autoTrip;
-      let modeNote = 'profil camion';
-
-      if (truckTrip && autoTrip) {
-        const sTruck = scoreHighwayPreference(truckTrip);
-        const sAuto = scoreHighwayPreference(autoTrip);
-        // Si le tracé auto privilégie clairement les autoroutes (A-10→A-35), on le prend
-        if (sAuto > sTruck + 15) {
-          trip = autoTrip;
-          modeNote = 'autoroutes privilégiées (corrige les détours type rangs / Longueuil)';
-        }
-      } else if (autoTrip && !truckTrip) {
-        trip = autoTrip;
-        modeNote = 'tracé autoroutier';
+      candidates.sort((a, b) => scoreTruckFriendliness(b) - scoreTruckFriendliness(a));
+      let trip = candidates[0];
+      let modeNote = 'profil camion (évite hgv=no / rues locales)';
+      const localKm = summarizeLocalStreetKm(trip);
+      if (localKm > 1.5) {
+        modeNote += ' · attention : ~' + localKm.toFixed(1) + ' km de rues locales (accès destination)';
       }
 
       const allCoords = tripCoords(trip);
