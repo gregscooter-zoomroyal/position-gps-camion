@@ -1,0 +1,5 @@
+.credentials.local
+*.local
+.DS_Store
+Thumbs.db
+node_modules/

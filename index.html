@@ -1,0 +1,1798 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Position · GPS Camion</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0A0E12;
+    --panel: #10161C;
+    --panel-2: #151D25;
+    --line: #23303B;
+    --amber: #FFB238;
+    --amber-dim: #8A6524;
+    --text: #E7EDF2;
+    --text-dim: #6B7A87;
+    --green: #4ADE80;
+    --red: #FF3B3B;
+    --blue: #5CA9FF;
+    --route: #FFB238;
+    --sheet-h: min(42vh, 380px);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Space Grotesk', sans-serif;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ── Header ── */
+  header {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 16px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--line);
+    z-index: 1100;
+  }
+  header .title {
+    font-weight: 700;
+    font-size: 16px;
+    letter-spacing: 0.02em;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  header .title span { color: var(--amber); }
+  header .badge {
+    font-family: 'Space Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--amber);
+    border: 1px solid var(--amber-dim);
+    padding: 2px 7px;
+    border-radius: 6px;
+  }
+  #status {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    color: var(--text-dim);
+    text-align: right;
+  }
+  #status .dot {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--text-dim);
+    margin-right: 5px;
+    vertical-align: 1px;
+  }
+  #status.live .dot { background: var(--green); box-shadow: 0 0 6px var(--green); }
+  #status.error .dot { background: var(--red); }
+
+  /* ── Map stage ── */
+  #map-stage {
+    flex: 1;
+    position: relative;
+    min-height: 0;
+  }
+  #map {
+    position: absolute;
+    inset: 0;
+    background: #1a1a1a;
+    cursor: crosshair;
+  }
+  #map .leaflet-tile-pane {
+    filter: invert(1) hue-rotate(180deg) brightness(1.02) contrast(0.85) saturate(0.55);
+  }
+  .leaflet-control-attribution {
+    filter: invert(1) hue-rotate(180deg);
+  }
+  .leaflet-top .leaflet-control {
+    margin-top: 72px;
+  }
+  .leaflet-bottom .leaflet-control {
+    margin-bottom: 12px;
+  }
+
+  /* ── Guidance banner (floating card) ── */
+  #guidance-banner {
+    display: none;
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    right: 12px;
+    z-index: 1000;
+    background: linear-gradient(180deg, #1A2229 0%, var(--panel) 100%);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 14px 16px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+  }
+  #guidance-banner.active { display: block; }
+  #guidance-banner .dist {
+    font-family: 'Space Mono', monospace;
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--amber);
+    margin-bottom: 2px;
+    line-height: 1.1;
+  }
+  #guidance-banner .instr {
+    font-size: 15px;
+    font-weight: 500;
+    line-height: 1.35;
+  }
+  #guidance-banner .street {
+    font-family: 'Space Mono', monospace;
+    font-size: 12px;
+    color: var(--text-dim);
+    margin-top: 4px;
+  }
+
+  /* ── Bottom sheet ── */
+  #sheet {
+    flex-shrink: 0;
+    height: var(--sheet-h);
+    display: flex;
+    flex-direction: column;
+    background: var(--panel);
+    border-radius: 20px 20px 0 0;
+    box-shadow: 0 -8px 40px rgba(0, 0, 0, 0.5);
+    z-index: 900;
+    overflow: hidden;
+  }
+  .sheet-handle {
+    flex-shrink: 0;
+    width: 36px;
+    height: 4px;
+    background: var(--line);
+    border-radius: 2px;
+    margin: 10px auto 6px;
+  }
+  .sheet-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 4px 16px 8px;
+    -webkit-overflow-scrolling: touch;
+  }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  /* ── Tab bar ── */
+  .tab-bar {
+    flex-shrink: 0;
+    display: flex;
+    border-top: 1px solid var(--line);
+    background: var(--panel);
+    padding-bottom: env(safe-area-inset-bottom, 0);
+  }
+  .tab-btn {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    padding: 8px 4px 10px;
+    background: transparent;
+    border: none;
+    color: var(--text-dim);
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    cursor: pointer;
+    width: auto;
+  }
+  .tab-btn svg {
+    width: 22px;
+    height: 22px;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .tab-btn[data-tab="accueil"] svg {
+    fill: currentColor;
+    stroke: none;
+  }
+  .tab-btn.active { color: var(--amber); }
+  .tab-btn:active { opacity: 0.7; }
+
+  /* ── Panel sections ── */
+  .panel-title {
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin: 14px 0 8px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .panel-title::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--line);
+  }
+  .panel-title:first-child { margin-top: 4px; }
+
+  .coords {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 12px 14px;
+    margin-bottom: 10px;
+  }
+  .coords .lines { font-family: 'Space Mono', monospace; }
+  .coords .lines div { font-size: 14px; margin-bottom: 2px; }
+  .coords .lines .lat { color: var(--amber); }
+  .coords .lines .lon { color: var(--text); }
+
+  #compass {
+    width: 50px;
+    height: 50px;
+    flex-shrink: 0;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1px;
+    background: var(--line);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    overflow: hidden;
+    margin-bottom: 12px;
+  }
+  .grid.two-col { grid-template-columns: 1fr 1fr; }
+  .cell {
+    background: var(--panel-2);
+    padding: 10px 12px;
+  }
+  .cell .label {
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-bottom: 3px;
+  }
+  .cell .value {
+    font-family: 'Space Mono', monospace;
+    font-size: 16px;
+    font-weight: 700;
+  }
+  .cell .unit {
+    font-size: 11px;
+    color: var(--text-dim);
+    font-weight: 400;
+    margin-left: 2px;
+  }
+
+  button {
+    width: 100%;
+    background: var(--amber);
+    color: #181205;
+    border: none;
+    border-radius: 14px;
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 700;
+    font-size: 14px;
+    letter-spacing: 0.02em;
+    padding: 12px;
+    cursor: pointer;
+  }
+  button:active { opacity: 0.85; }
+  button.stop {
+    background: transparent;
+    color: var(--text-dim);
+    border: 1px solid var(--line);
+  }
+  button:disabled {
+    background: var(--panel-2);
+    color: var(--text-dim);
+    cursor: not-allowed;
+  }
+
+  #accuracy-note {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    color: var(--text-dim);
+    margin-top: 8px;
+    text-align: center;
+    line-height: 1.4;
+  }
+
+  .vehicle-card {
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 12px 14px;
+    margin-bottom: 8px;
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    line-height: 1.5;
+  }
+  .vehicle-card strong {
+    color: var(--amber);
+    font-weight: 700;
+  }
+
+  .toggle-group {
+    display: flex;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    overflow: hidden;
+    margin-bottom: 10px;
+  }
+  .toggle-group button {
+    flex: 1;
+    background: transparent;
+    color: var(--text-dim);
+    font-weight: 500;
+    padding: 10px;
+    border-radius: 0;
+  }
+  .toggle-group button.active {
+    background: var(--panel-2);
+    color: var(--amber);
+    font-weight: 700;
+  }
+
+  input[type="text"] {
+    width: 100%;
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    border-radius: 24px;
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    font-size: 13px;
+    padding: 11px 16px;
+  }
+  input[type="text"]::placeholder { color: var(--text-dim); }
+  input[type="text"]:focus { outline: 1px solid var(--amber-dim); }
+
+  .search-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+  .search-row input { flex: 1; }
+  .search-row button { width: auto; padding: 11px 16px; border-radius: 24px; flex-shrink: 0; }
+
+  .field-error {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    color: var(--red);
+    margin: -2px 0 10px;
+    min-height: 14px;
+  }
+
+  .search-wrap {
+    position: relative;
+    flex: 1;
+  }
+  .suggestions {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    z-index: 1000;
+    max-height: 180px;
+    overflow-y: auto;
+    display: none;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  }
+  .suggestions.open { display: block; }
+  .suggestions .item {
+    padding: 10px 14px;
+    font-family: 'Space Mono', monospace;
+    font-size: 12px;
+    color: var(--text);
+    border-bottom: 1px solid var(--line);
+    cursor: pointer;
+  }
+  .suggestions .item:last-child { border-bottom: none; }
+  .suggestions .item:hover,
+  .suggestions .item.active {
+    background: var(--panel);
+    color: var(--amber);
+  }
+
+  .dest-info {
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--blue);
+    border-radius: 14px;
+    padding: 12px 14px;
+    margin-bottom: 10px;
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    font-family: 'Space Mono', monospace;
+    font-size: 13px;
+  }
+  .dest-info .lbl {
+    color: var(--text-dim);
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 3px;
+  }
+  .dest-hint {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-bottom: 10px;
+    line-height: 1.4;
+  }
+
+  .btn-row {
+    display: flex;
+    gap: 8px;
+  }
+  .btn-row button { flex: 1; }
+
+  .voice-row {
+    display: flex;
+    gap: 8px;
+    margin: 10px 0 0;
+  }
+  .voice-row button { flex: 1; }
+
+  .truck-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 14px;
+    margin-bottom: 10px;
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+  .truck-legend .swatch {
+    display: inline-block;
+    width: 14px;
+    height: 3px;
+    margin-right: 6px;
+    vertical-align: 2px;
+    border-radius: 1px;
+  }
+  .truck-legend .swatch.dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    vertical-align: -1px;
+  }
+  .truck-note {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-top: 8px;
+    line-height: 1.45;
+  }
+
+  .bridge-popup {
+    font-family: 'Space Mono', monospace;
+    font-size: 12px;
+    line-height: 1.4;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="title">Position<span>·</span>GPS <span class="badge">Camion</span></div>
+  <div id="status"><span class="dot"></span>en attente</div>
+</header>
+
+<div id="map-stage">
+  <div id="map"></div>
+  <div id="guidance-banner">
+    <div class="dist" id="guidance-dist">—</div>
+    <div class="instr" id="guidance-instr">En attente d'itinéraire</div>
+    <div class="street" id="guidance-street"></div>
+  </div>
+</div>
+
+<div id="sheet">
+  <div class="sheet-handle"></div>
+  <div class="sheet-body">
+
+    <div class="tab-panel active" data-panel="accueil">
+      <div class="coords">
+        <div class="lines">
+          <div class="lat" id="lat">LAT — . — — — — —</div>
+          <div class="lon" id="lon">LON — . — — — — —</div>
+        </div>
+        <svg id="compass" viewBox="0 0 100 100">
+          <circle cx="50" cy="50" r="46" fill="none" stroke="#23303B" stroke-width="2"/>
+          <text x="50" y="16" fill="#6B7A87" font-size="10" font-family="Space Mono" text-anchor="middle">N</text>
+          <text x="50" y="90" fill="#6B7A87" font-size="10" font-family="Space Mono" text-anchor="middle">S</text>
+          <text x="12" y="54" fill="#6B7A87" font-size="10" font-family="Space Mono" text-anchor="middle">O</text>
+          <text x="88" y="54" fill="#6B7A87" font-size="10" font-family="Space Mono" text-anchor="middle">E</text>
+          <g id="needle" transform="rotate(0 50 50)">
+            <polygon points="50,16 44,54 56,54" fill="#FFB238"/>
+            <circle cx="50" cy="50" r="4" fill="#E7EDF2"/>
+          </g>
+        </svg>
+      </div>
+      <div class="grid">
+        <div class="cell">
+          <div class="label">Vitesse</div>
+          <div class="value" id="speed">—<span class="unit">km/h</span></div>
+        </div>
+        <div class="cell">
+          <div class="label">Altitude</div>
+          <div class="value" id="alt">—<span class="unit">m</span></div>
+        </div>
+        <div class="cell">
+          <div class="label">Précision</div>
+          <div class="value" id="acc">—<span class="unit">m</span></div>
+        </div>
+      </div>
+      <button id="toggle">Activer la localisation</button>
+      <div id="accuracy-note">GPS camion uniquement (CA · US · MX). Autorise la position sur ton appareil — rien n'est envoyé ailleurs.</div>
+      <div class="panel-title">Profil véhicule</div>
+      <div class="vehicle-card">
+        Drybox standard appliqué en permanence<br>
+        <strong>Hauteur 4,15 m</strong> (13′6″) · Largeur 2,6 m · Longueur 21,6 m · Masse 36,3 t<br>
+        Les ponts trop bas sont évités automatiquement.
+      </div>
+    </div>
+
+    <div class="tab-panel" data-panel="go">
+      <div class="panel-title">Point de départ</div>
+      <div class="toggle-group">
+        <button id="origin-gps" class="active">Ma position</button>
+        <button id="origin-manual">Adresse</button>
+      </div>
+      <div id="origin-address-row" style="display:none;">
+        <div class="search-row">
+          <div class="search-wrap">
+            <input type="text" id="origin-input" placeholder="Ex. 123 rue Principale, Granby" autocomplete="off">
+            <div class="suggestions" id="origin-suggestions"></div>
+          </div>
+          <button id="origin-search">Valider</button>
+        </div>
+        <div class="field-error" id="origin-error"></div>
+      </div>
+      <div class="panel-title">Destination</div>
+      <div class="search-row">
+        <div class="search-wrap">
+          <input type="text" id="dest-input" placeholder="Adresse de destination (CA / US / MX)" autocomplete="off">
+          <div class="suggestions" id="dest-suggestions"></div>
+        </div>
+        <button id="dest-search">Chercher</button>
+      </div>
+      <div class="field-error" id="dest-error"></div>
+      <div class="dest-hint" id="dest-hint">Ou touche la carte. L'itinéraire camion se calcule dès que départ et destination sont prêts.</div>
+      <div id="dest-active" style="display:none;">
+        <div class="dest-info">
+          <div>
+            <div class="lbl">À vol d'oiseau</div>
+            <div id="dest-dist">—</div>
+          </div>
+          <div>
+            <div class="lbl">Cap</div>
+            <div id="dest-bearing">—</div>
+          </div>
+          <div>
+            <div class="lbl">Itinéraire</div>
+            <div id="route-summary">—</div>
+          </div>
+        </div>
+        <button id="route-calc">Recalculer l'itinéraire camion</button>
+        <div class="voice-row">
+          <button id="voice-toggle" type="button">Voix : activée</button>
+          <button id="voice-test" class="stop" type="button">Tester la voix</button>
+        </div>
+        <div class="truck-note" id="route-note"></div>
+        <button id="dest-clear" class="stop">Annuler la destination</button>
+      </div>
+    </div>
+
+    <div class="tab-panel" data-panel="zones">
+      <div class="panel-title">Zones sur la carte</div>
+      <div class="truck-legend">
+        <div><span class="swatch" style="background:rgba(255,255,255,0.55);"></span>Routes navigables camion</div>
+        <div><span class="swatch" style="background:#FF3B3B;"></span>Quartiers / interdites</div>
+        <div><span class="swatch dot" style="background:#FFB238;"></span>Pont bas (&lt; 4,15 m)</div>
+      </div>
+      <div class="truck-note" id="truck-note">Zoome au niveau rue pour voir les zones camion et les ponts bas (données OpenStreetMap).</div>
+    </div>
+
+    <div class="tab-panel" data-panel="trajet">
+      <div class="panel-title">Trajet</div>
+      <div class="grid two-col">
+        <div class="cell">
+          <div class="label">Distance parcourue</div>
+          <div class="value" id="track-dist">0<span class="unit">m</span></div>
+        </div>
+        <div class="cell">
+          <div class="label">Points enregistrés</div>
+          <div class="value" id="track-points">0</div>
+        </div>
+      </div>
+      <div class="btn-row">
+        <button id="track-toggle">Suivre le trajet</button>
+        <button id="track-export" disabled>Exporter GPX</button>
+      </div>
+      <div class="btn-row" style="margin-top:8px;">
+        <button id="track-clear" class="stop">Effacer le trajet</button>
+      </div>
+    </div>
+
+  </div>
+
+  <nav class="tab-bar">
+    <button type="button" class="tab-btn active" data-tab="accueil">
+      <svg viewBox="0 0 24 24"><path d="M3 9.5L12 3l9 6.5V20a1 1 0 01-1 1h-5v-6H9v6H4a1 1 0 01-1-1V9.5z"/></svg>
+      Accueil
+    </button>
+    <button type="button" class="tab-btn" data-tab="go">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="10" r="3"/><path d="M12 21s7-4.35 7-10a7 7 0 10-14 0c0 5.65 7 10 7 10z"/></svg>
+      Go
+    </button>
+    <button type="button" class="tab-btn" data-tab="zones">
+      <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+      Zones
+    </button>
+    <button type="button" class="tab-btn" data-tab="trajet">
+      <svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      Trajet
+    </button>
+  </nav>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+  // Profil drybox / remorque standard Amérique du Nord (toujours actif)
+  const TRUCK = {
+    height: 4.15,   // m — 13'6"
+    width: 2.6,     // m — 8'6"
+    length: 21.64,  // m — tracteur + 53'
+    weight: 36.287, // t — ~80 000 lb
+    axle_load: 9.07,
+    axle_count: 5,
+    hazmat: false
+  };
+
+  const VALHALLA_URL = 'https://valhalla1.openstreetmap.de/route';
+  const OVERPASS_URL = 'https://overpass-api.de/api/interpreter';
+  const NOMINATIM = 'https://nominatim.openstreetmap.org';
+
+  const map = L.map('map', { zoomControl: true }).setView([46.8, -71.2], 5);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '&copy; OpenStreetMap'
+  }).addTo(map);
+
+  setTimeout(() => map.invalidateSize(), 100);
+
+  map.createPane('truckPane');
+  map.getPane('truckPane').style.zIndex = 450;
+  map.createPane('routePane');
+  map.getPane('routePane').style.zIndex = 460;
+  map.createPane('bridgePane');
+  map.getPane('bridgePane').style.zIndex = 470;
+
+  let marker = null;
+  let accuracyCircle = null;
+  let watchId = null;
+  let hasCentered = false;
+  let lastLatLng = null;
+
+  let destMarker = null;
+  let destGuideLine = null;
+  let destLatLng = null;
+  let routeLine = null;
+
+  let originMode = 'gps';
+  let manualOriginLatLng = null;
+  let originMarker = null;
+
+  let truckAllowedLayer = null;
+  let truckForbiddenLayer = null;
+  let bridgeLayer = null;
+  let truckLoading = false;
+  let routeLoading = false;
+
+  let tracking = false;
+  let trackPoints = [];
+  let trackLine = null;
+  let trackDistanceM = 0;
+
+  // Navigation vocale
+  const VOICE_THRESHOLDS = { far: 500, near: 100, now: 35 };
+  let voiceEnabled = true;
+  let frenchVoice = null;
+  let guidanceSteps = [];
+  let guidanceIndex = 0;
+  let speechUnlocked = false;
+
+  const guidanceBanner = document.getElementById('guidance-banner');
+  const guidanceDistEl = document.getElementById('guidance-dist');
+  const guidanceInstrEl = document.getElementById('guidance-instr');
+  const guidanceStreetEl = document.getElementById('guidance-street');
+  const voiceToggleBtn = document.getElementById('voice-toggle');
+  const voiceTestBtn = document.getElementById('voice-test');
+
+  const statusEl = document.getElementById('status');
+  const toggleBtn = document.getElementById('toggle');
+  const latEl = document.getElementById('lat');
+  const lonEl = document.getElementById('lon');
+  const speedEl = document.getElementById('speed');
+  const altEl = document.getElementById('alt');
+  const accEl = document.getElementById('acc');
+  const needle = document.getElementById('needle');
+
+  const destHint = document.getElementById('dest-hint');
+  const destActive = document.getElementById('dest-active');
+  const destDistEl = document.getElementById('dest-dist');
+  const destBearingEl = document.getElementById('dest-bearing');
+  const destClearBtn = document.getElementById('dest-clear');
+  const destInput = document.getElementById('dest-input');
+  const destSearchBtn = document.getElementById('dest-search');
+  const destError = document.getElementById('dest-error');
+  const routeCalcBtn = document.getElementById('route-calc');
+  const routeNote = document.getElementById('route-note');
+  const routeSummaryEl = document.getElementById('route-summary');
+
+  const originGpsBtn = document.getElementById('origin-gps');
+  const originManualBtn = document.getElementById('origin-manual');
+  const originAddressRow = document.getElementById('origin-address-row');
+  const originInput = document.getElementById('origin-input');
+  const originSearchBtn = document.getElementById('origin-search');
+  const originError = document.getElementById('origin-error');
+
+  const truckNote = document.getElementById('truck-note');
+
+  const trackToggleBtn = document.getElementById('track-toggle');
+  const trackExportBtn = document.getElementById('track-export');
+  const trackClearBtn = document.getElementById('track-clear');
+  const trackDistEl = document.getElementById('track-dist');
+  const trackPointsEl = document.getElementById('track-points');
+
+  function setStatus(state, text){
+    statusEl.className = state;
+    statusEl.innerHTML = '<span class="dot"></span>' + text;
+  }
+
+  function fmtCoord(value, posLabel, negLabel){
+    const dir = value >= 0 ? posLabel : negLabel;
+    const abs = Math.abs(value);
+    const deg = Math.floor(abs);
+    const minFloat = (abs - deg) * 60;
+    const min = Math.floor(minFloat);
+    const sec = ((minFloat - min) * 60).toFixed(1);
+    return dir + ' ' + deg + '° ' + min + "' " + sec + '"';
+  }
+
+  function toRad(d){ return d * Math.PI / 180; }
+  function toDeg(r){ return r * 180 / Math.PI; }
+
+  function haversine(lat1, lon1, lat2, lon2){
+    const R = 6371000;
+    const dLat = toRad(lat2 - lat1);
+    const dLon = toRad(lon2 - lon1);
+    const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon/2)**2;
+    return 2 * R * Math.asin(Math.sqrt(a));
+  }
+
+  function bearing(lat1, lon1, lat2, lon2){
+    const y = Math.sin(toRad(lon2-lon1)) * Math.cos(toRad(lat2));
+    const x = Math.cos(toRad(lat1))*Math.sin(toRad(lat2)) - Math.sin(toRad(lat1))*Math.cos(toRad(lat2))*Math.cos(toRad(lon2-lon1));
+    return (toDeg(Math.atan2(y, x)) + 360) % 360;
+  }
+
+  function fmtDist(m){
+    if (m >= 1000) return (m/1000).toFixed(2) + ' km';
+    return Math.round(m) + ' m';
+  }
+
+  function fmtDuration(seconds){
+    const s = Math.round(seconds);
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    if (h > 0) return h + ' h ' + m + ' min';
+    return m + ' min';
+  }
+
+  function debounce(fn, delay){
+    let timer = null;
+    return (...args) => {
+      clearTimeout(timer);
+      timer = setTimeout(() => fn(...args), delay);
+    };
+  }
+
+  function pickFrenchVoice(){
+    if (!window.speechSynthesis) return null;
+    const voices = speechSynthesis.getVoices();
+    return voices.find(v => /^fr(-|_)/i.test(v.lang) && /CA|FR|BE|CH/i.test(v.lang)) ||
+      voices.find(v => /^fr/i.test(v.lang)) ||
+      null;
+  }
+
+  function refreshVoices(){
+    frenchVoice = pickFrenchVoice();
+  }
+
+  if (window.speechSynthesis) {
+    refreshVoices();
+    speechSynthesis.onvoiceschanged = refreshVoices;
+  }
+
+  function unlockSpeech(){
+    if (!window.speechSynthesis || speechUnlocked) return;
+    try {
+      const warm = new SpeechSynthesisUtterance(' ');
+      warm.volume = 0.01;
+      warm.rate = 1;
+      speechSynthesis.speak(warm);
+      speechSynthesis.cancel();
+      speechUnlocked = true;
+    } catch (e) { /* ignore */ }
+  }
+
+  function speak(text, { interrupt } = { interrupt: true }){
+    if (!voiceEnabled || !window.speechSynthesis || !text) return;
+    unlockSpeech();
+    if (interrupt) speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = (frenchVoice && frenchVoice.lang) || 'fr-CA';
+    if (frenchVoice) u.voice = frenchVoice;
+    u.rate = 1.02;
+    u.pitch = 1;
+    u.volume = 1;
+    speechSynthesis.speak(u);
+  }
+
+  function maneuverPhrase(step){
+    if (step.succinct) return step.succinct.replace(/\.$/, '');
+    if (step.verbal) return step.verbal.replace(/\.$/, '');
+    if (step.instruction) return step.instruction.replace(/\.$/, '');
+    return 'Continuez tout droit';
+  }
+
+  function announceDistance(meters, step){
+    const phrase = maneuverPhrase(step);
+    if (meters >= VOICE_THRESHOLDS.far) {
+      return 'Dans cinq cents mètres. ' + phrase;
+    }
+    if (meters >= VOICE_THRESHOLDS.near) {
+      return 'Dans cent mètres. ' + phrase;
+    }
+    return 'Maintenant. ' + phrase;
+  }
+
+  function isArrivalManeuver(type){
+    return type === 4 || type === 5 || type === 6;
+  }
+
+  function isStartManeuver(type){
+    return type === 1;
+  }
+
+  function buildGuidanceSteps(trip){
+    const steps = [];
+    trip.legs.forEach((leg) => {
+      const shape = decodePolyline6(leg.shape);
+      (leg.maneuvers || []).forEach((m) => {
+        const idx = Math.max(0, Math.min(m.begin_shape_index || 0, shape.length - 1));
+        const pt = shape[idx];
+        if (!pt) return;
+        steps.push({
+          type: m.type,
+          instruction: m.instruction || '',
+          verbal: m.verbal_pre_transition_instruction || m.verbal_transition_alert_instruction || '',
+          succinct: m.verbal_succinct_transition_instruction || '',
+          street: (m.street_names && m.street_names.join(', ')) || '',
+          latlng: pt,
+          announced: { d500: false, d100: false, now: false }
+        });
+      });
+    });
+    return steps;
+  }
+
+  function resetGuidance(){
+    guidanceSteps = [];
+    guidanceIndex = 0;
+    if (window.speechSynthesis) speechSynthesis.cancel();
+    guidanceBanner.classList.remove('active');
+    guidanceDistEl.textContent = '—';
+    guidanceInstrEl.textContent = 'En attente d\'itinéraire';
+    guidanceStreetEl.textContent = '';
+  }
+
+  function startGuidance(trip){
+    guidanceSteps = buildGuidanceSteps(trip);
+    guidanceIndex = 0;
+    while (guidanceIndex < guidanceSteps.length && isStartManeuver(guidanceSteps[guidanceIndex].type)) {
+      guidanceSteps[guidanceIndex].announced = { d500: true, d100: true, now: true };
+      guidanceIndex++;
+    }
+    guidanceBanner.classList.add('active');
+    if (guidanceIndex < guidanceSteps.length) {
+      const step = guidanceSteps[guidanceIndex];
+      guidanceInstrEl.textContent = maneuverPhrase(step);
+      guidanceStreetEl.textContent = step.street || '';
+      guidanceDistEl.textContent = '—';
+      speak('Itinéraire camion prêt. Prochaine instruction : ' + maneuverPhrase(step) + '.');
+    } else {
+      guidanceInstrEl.textContent = 'Itinéraire prêt';
+    }
+  }
+
+  function updateGuidance(lat, lon){
+    if (!guidanceSteps.length || guidanceIndex >= guidanceSteps.length) return;
+
+    const step = guidanceSteps[guidanceIndex];
+    const dist = haversine(lat, lon, step.latlng[0], step.latlng[1]);
+
+    guidanceBanner.classList.add('active');
+    guidanceDistEl.textContent = dist >= 1000
+      ? (dist / 1000).toFixed(1) + ' km'
+      : Math.round(dist) + ' m';
+    guidanceInstrEl.textContent = maneuverPhrase(step);
+    guidanceStreetEl.textContent = step.street || '';
+
+    // Annonces : 500 m → 100 m → maintenant
+    if (!step.announced.d500 && dist <= VOICE_THRESHOLDS.far) {
+      step.announced.d500 = true;
+      if (dist > VOICE_THRESHOLDS.near) {
+        speak(announceDistance(VOICE_THRESHOLDS.far, step));
+      }
+    }
+    if (!step.announced.d100 && dist <= VOICE_THRESHOLDS.near) {
+      step.announced.d100 = true;
+      if (dist > VOICE_THRESHOLDS.now) {
+        speak(announceDistance(VOICE_THRESHOLDS.near, step));
+      }
+    }
+    if (!step.announced.now && dist <= VOICE_THRESHOLDS.now) {
+      step.announced.now = true;
+      if (isArrivalManeuver(step.type)) {
+        speak('Vous êtes arrivé à destination.');
+        guidanceDistEl.textContent = '0 m';
+        guidanceInstrEl.textContent = 'Arrivée';
+        guidanceIndex = guidanceSteps.length;
+        return;
+      }
+      speak(announceDistance(VOICE_THRESHOLDS.now, step));
+    }
+
+    // Passer à la manœuvre suivante une fois le virage franchi
+    if (step.announced.now && dist > VOICE_THRESHOLDS.now + 40) {
+      guidanceIndex++;
+      if (guidanceIndex >= guidanceSteps.length) {
+        guidanceInstrEl.textContent = 'Arrivée';
+        guidanceDistEl.textContent = '0 m';
+        return;
+      }
+      updateGuidance(lat, lon);
+    }
+  }
+
+  voiceToggleBtn.addEventListener('click', () => {
+    unlockSpeech();
+    voiceEnabled = !voiceEnabled;
+    voiceToggleBtn.textContent = voiceEnabled ? 'Voix : activée' : 'Voix : coupée';
+    if (!voiceEnabled && window.speechSynthesis) speechSynthesis.cancel();
+    else if (voiceEnabled) speak('Navigation vocale activée.');
+  });
+
+  voiceTestBtn.addEventListener('click', () => {
+    unlockSpeech();
+    voiceEnabled = true;
+    voiceToggleBtn.textContent = 'Voix : activée';
+    speak('Dans cinq cents mètres. Tournez à droite. Dans cent mètres. Tournez à droite. Maintenant. Tournez à droite.');
+  });
+
+  // Décodage polyline Valhalla (précision 1e6)
+  function decodePolyline6(str){
+    let index = 0, lat = 0, lon = 0;
+    const coords = [];
+    while (index < str.length) {
+      let b, shift = 0, result = 0;
+      do {
+        b = str.charCodeAt(index++) - 63;
+        result |= (b & 0x1f) << shift;
+        shift += 5;
+      } while (b >= 0x20);
+      const dlat = (result & 1) ? ~(result >> 1) : (result >> 1);
+      lat += dlat;
+
+      shift = 0;
+      result = 0;
+      do {
+        b = str.charCodeAt(index++) - 63;
+        result |= (b & 0x1f) << shift;
+        shift += 5;
+      } while (b >= 0x20);
+      const dlon = (result & 1) ? ~(result >> 1) : (result >> 1);
+      lon += dlon;
+      coords.push([lat / 1e6, lon / 1e6]);
+    }
+    return coords;
+  }
+
+  function parseMaxheightMeters(raw){
+    if (raw == null) return null;
+    let s = String(raw).trim().toLowerCase().replace(',', '.');
+    if (!s || s === 'default' || s === 'none' || s === 'unsigned') return null;
+
+    // feet'inches"  ex: 13'6" ou 13'6
+    const ftIn = s.match(/^(\d+)\s*['′]\s*(\d+(?:\.\d+)?)\s*(?:["″])?$/);
+    if (ftIn) return parseFloat(ftIn[1]) * 0.3048 + parseFloat(ftIn[2]) * 0.0254;
+
+    // feet only  ex: 13' ou 13 ft
+    const ft = s.match(/^(\d+(?:\.\d+)?)\s*(?:['′]|ft|feet)$/);
+    if (ft) return parseFloat(ft[1]) * 0.3048;
+
+    // meters
+    const m = s.match(/^(\d+(?:\.\d+)?)\s*m(?:eters?)?$/);
+    if (m) return parseFloat(m[1]);
+
+    const n = parseFloat(s);
+    if (isNaN(n)) return null;
+    // valeurs sans unité : si > 20, probablement des pieds
+    if (n > 20) return n * 0.3048;
+    return n;
+  }
+
+  async function fetchSuggestions(query){
+    const url = NOMINATIM + '/search?format=json&limit=5&addressdetails=0&countrycodes=ca,us,mx&q=' + encodeURIComponent(query);
+    const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+    if (!res.ok) return [];
+    return res.json();
+  }
+
+  function attachAutocomplete(inputEl, listEl, onSelect){
+    let results = [];
+    let activeIndex = -1;
+
+    function closeList(){
+      listEl.classList.remove('open');
+      listEl.innerHTML = '';
+      results = [];
+      activeIndex = -1;
+    }
+
+    function renderList(){
+      listEl.innerHTML = '';
+      results.forEach((r, i) => {
+        const item = document.createElement('div');
+        item.className = 'item' + (i === activeIndex ? ' active' : '');
+        item.textContent = r.display_name;
+        item.addEventListener('mousedown', (e) => {
+          e.preventDefault();
+          pick(i);
+        });
+        listEl.appendChild(item);
+      });
+      listEl.classList.toggle('open', results.length > 0);
+    }
+
+    function pick(i){
+      const r = results[i];
+      if (!r) return;
+      inputEl.value = r.display_name;
+      closeList();
+      onSelect([parseFloat(r.lat), parseFloat(r.lon)], r.display_name);
+    }
+
+    const runSearch = debounce(async (q) => {
+      if (q.trim().length < 3) { closeList(); return; }
+      try {
+        results = await fetchSuggestions(q);
+        activeIndex = -1;
+        renderList();
+      } catch (err) {
+        closeList();
+      }
+    }, 400);
+
+    inputEl.addEventListener('input', () => runSearch(inputEl.value));
+
+    inputEl.addEventListener('keydown', (e) => {
+      if (!results.length) return;
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        activeIndex = (activeIndex + 1) % results.length;
+        renderList();
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        activeIndex = (activeIndex - 1 + results.length) % results.length;
+        renderList();
+      } else if (e.key === 'Enter') {
+        if (activeIndex >= 0) {
+          e.preventDefault();
+          pick(activeIndex);
+        } else {
+          closeList();
+        }
+      } else if (e.key === 'Escape') {
+        closeList();
+      }
+    });
+
+    inputEl.addEventListener('blur', () => setTimeout(closeList, 100));
+  }
+
+  function currentOrigin(){
+    return originMode === 'manual' ? manualOriginLatLng : lastLatLng;
+  }
+
+  function updateDestInfo(){
+    if (!destLatLng) return;
+    const origin = currentOrigin();
+    if (!origin) {
+      destDistEl.textContent = '—';
+      destBearingEl.textContent = '—';
+      return;
+    }
+    const d = haversine(origin[0], origin[1], destLatLng[0], destLatLng[1]);
+    const b = bearing(origin[0], origin[1], destLatLng[0], destLatLng[1]);
+    destDistEl.textContent = fmtDist(d);
+    destBearingEl.textContent = Math.round(b) + '°';
+    if (destGuideLine) destGuideLine.setLatLngs([origin, destLatLng]);
+  }
+
+  async function geocode(query){
+    const url = NOMINATIM + '/search?format=json&limit=1&countrycodes=ca,us,mx&q=' + encodeURIComponent(query);
+    const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+    if (!res.ok) throw new Error('recherche indisponible');
+    const results = await res.json();
+    if (!results.length) throw new Error('adresse introuvable');
+    return [parseFloat(results[0].lat), parseFloat(results[0].lon)];
+  }
+
+  function setOriginMarker(latlng){
+    if (!originMarker) {
+      originMarker = L.marker(latlng, {
+        icon: L.divIcon({
+          className: '',
+          html: '<div style="width:14px;height:14px;border-radius:50%;background:#4ADE80;border:2px solid #0A0E12;"></div>',
+          iconSize: [14,14],
+          iconAnchor: [7,7]
+        })
+      }).addTo(map);
+    } else {
+      originMarker.setLatLng(latlng);
+    }
+  }
+
+  function clearRoute(){
+    if (routeLine) { map.removeLayer(routeLine); routeLine = null; }
+    routeSummaryEl.textContent = '—';
+    routeNote.textContent = '';
+    resetGuidance();
+  }
+
+  function tripCoords(trip){
+    const allCoords = [];
+    trip.legs.forEach((leg) => {
+      const part = decodePolyline6(leg.shape);
+      if (allCoords.length && part.length) part.shift();
+      allCoords.push(...part);
+    });
+    return allCoords;
+  }
+
+  // Score : favorise autoroutes (A-10, A-35…) et pénalise rangs / rues locales
+  function scoreHighwayPreference(trip){
+    let score = 0;
+    (trip.legs || []).forEach((leg) => {
+      (leg.maneuvers || []).forEach((m) => {
+        const len = m.length || 0;
+        const names = (m.street_names || []).map(n => String(n).toLowerCase());
+        const joined = names.join(' ');
+
+        if (m.highway) score += len * 12;
+
+        // Autoroutes / routes numérotées majeures Québec / NA
+        if (names.some(n => /^(a-?)?\d{1,3}(\s|$)/i.test(n) || n === '10' || n === '35' || n === '15' || n === '20' || n === '40' || n === '55' || n === '73')) {
+          score += len * 8;
+        }
+        if (/autoroute|freeway|interstate|expressway|highway/.test(joined)) score += len * 10;
+
+        // Pénalité forte pour détours type rang / route locale
+        if (/^rang\b|\brang\b/.test(joined)) score -= len * 25;
+        if (!m.highway && /\brue\b|\bavenue\b|\bboulevard\b|\bchemin\b/.test(joined)) score -= len * 4;
+        if (/\blongueuil\b|\bbrossard\b|\blaval\b/.test(joined)) score -= len * 15;
+      });
+    });
+    // Léger bonus au temps plus court, sans écraser le choix autoroutier
+    score -= (trip.summary.time || 0) * 0.002;
+    return score;
+  }
+
+  async function fetchValhallaTrip(costing, costingOptions){
+    const body = {
+      locations: [
+        { lat: currentOrigin()[0], lon: currentOrigin()[1], type: 'break' },
+        { lat: destLatLng[0], lon: destLatLng[1], type: 'break' }
+      ],
+      costing,
+      costing_options: costingOptions,
+      directions_options: { units: 'kilometers', language: 'fr-FR' }
+    };
+    const url = VALHALLA_URL + '?json=' + encodeURIComponent(JSON.stringify(body));
+    const res = await fetch(url);
+    const data = await res.json();
+    if (!res.ok || data.error || !data.trip) {
+      throw new Error((data && (data.error || data.error_message)) || 'itinéraire impossible');
+    }
+    return data.trip;
+  }
+
+  async function calculateTruckRoute(){
+    const origin = currentOrigin();
+    if (!origin || !destLatLng) {
+      routeNote.textContent = 'Définis un point de départ et une destination.';
+      return;
+    }
+    if (routeLoading) return;
+    unlockSpeech();
+    routeLoading = true;
+    routeCalcBtn.disabled = true;
+    routeCalcBtn.textContent = 'Calcul camion…';
+    routeNote.textContent = 'Calcul d\'un itinéraire poids lourd (préférence autoroutes, ponts < ' +
+      TRUCK.height.toFixed(2).replace('.', ',') + ' m)…';
+
+    const truckOpts = {
+      truck: {
+        height: TRUCK.height,
+        width: TRUCK.width,
+        length: TRUCK.length,
+        weight: TRUCK.weight,
+        axle_load: TRUCK.axle_load,
+        axle_count: TRUCK.axle_count,
+        hazmat: TRUCK.hazmat,
+        use_highways: 1,
+        use_tolls: 0.8,
+        use_tracks: 0,
+        use_living_streets: 0,
+        use_ferry: 0,
+        country_crossing_penalty: 0
+      }
+    };
+    const autoOpts = {
+      auto: {
+        use_highways: 1,
+        use_tolls: 0.8,
+        use_tracks: 0,
+        use_living_streets: 0,
+        use_ferry: 0,
+        shortest: false
+      }
+    };
+
+    try {
+      // Valhalla « truck » évite parfois des autoroutes camion-légales (ex. A-35)
+      // → on compare avec un tracé autoroutier et on garde le plus logique.
+      const results = await Promise.allSettled([
+        fetchValhallaTrip('truck', truckOpts),
+        fetchValhallaTrip('auto', autoOpts)
+      ]);
+
+      const truckTrip = results[0].status === 'fulfilled' ? results[0].value : null;
+      const autoTrip = results[1].status === 'fulfilled' ? results[1].value : null;
+      if (!truckTrip && !autoTrip) {
+        throw new Error(results[0].reason?.message || results[1].reason?.message || 'itinéraire impossible');
+      }
+
+      let trip = truckTrip || autoTrip;
+      let modeNote = 'profil camion';
+
+      if (truckTrip && autoTrip) {
+        const sTruck = scoreHighwayPreference(truckTrip);
+        const sAuto = scoreHighwayPreference(autoTrip);
+        // Si le tracé auto privilégie clairement les autoroutes (A-10→A-35), on le prend
+        if (sAuto > sTruck + 15) {
+          trip = autoTrip;
+          modeNote = 'autoroutes privilégiées (corrige les détours type rangs / Longueuil)';
+        }
+      } else if (autoTrip && !truckTrip) {
+        trip = autoTrip;
+        modeNote = 'tracé autoroutier';
+      }
+
+      const allCoords = tripCoords(trip);
+      if (allCoords.length < 2) throw new Error('tracé vide');
+
+      if (routeLine) map.removeLayer(routeLine);
+      routeLine = L.polyline(allCoords, {
+        pane: 'routePane',
+        color: '#FFB238',
+        weight: 5,
+        opacity: 0.95
+      }).addTo(map);
+
+      if (destGuideLine) {
+        map.removeLayer(destGuideLine);
+        destGuideLine = null;
+      }
+
+      const summary = trip.summary;
+      routeSummaryEl.textContent = summary.length.toFixed(1) + ' km';
+      routeNote.textContent = 'Itinéraire camion : ' + summary.length.toFixed(1) + ' km · ' +
+        fmtDuration(summary.time) + ' · ' + modeNote +
+        ' · guidage vocal à 500 m, 100 m et au virage.';
+      map.fitBounds(routeLine.getBounds(), { padding: [40, 40] });
+      startGuidance(trip);
+      if (lastLatLng) updateGuidance(lastLatLng[0], lastLatLng[1]);
+    } catch (err) {
+      clearRoute();
+      routeNote.textContent = 'Impossible de calculer l\'itinéraire (' + err.message + ').';
+    } finally {
+      routeLoading = false;
+      routeCalcBtn.disabled = false;
+      routeCalcBtn.textContent = 'Recalculer l\'itinéraire camion';
+    }
+  }
+
+  const maybeAutoRoute = debounce(() => {
+    if (currentOrigin() && destLatLng) calculateTruckRoute();
+  }, 400);
+
+  attachAutocomplete(originInput, document.getElementById('origin-suggestions'), (latlng) => {
+    originError.textContent = '';
+    manualOriginLatLng = latlng;
+    setOriginMarker(latlng);
+    if (!hasCentered) { map.setView(latlng, 14); hasCentered = true; }
+    updateDestInfo();
+    maybeAutoRoute();
+  });
+
+  attachAutocomplete(destInput, document.getElementById('dest-suggestions'), (latlng) => {
+    destError.textContent = '';
+    setDestination(latlng);
+    map.setView(latlng, 14);
+  });
+
+  originGpsBtn.addEventListener('click', () => {
+    originMode = 'gps';
+    originGpsBtn.classList.add('active');
+    originManualBtn.classList.remove('active');
+    originAddressRow.style.display = 'none';
+    if (originMarker) { map.removeLayer(originMarker); originMarker = null; }
+    updateDestInfo();
+    maybeAutoRoute();
+  });
+
+  originManualBtn.addEventListener('click', () => {
+    originMode = 'manual';
+    originManualBtn.classList.add('active');
+    originGpsBtn.classList.remove('active');
+    originAddressRow.style.display = 'block';
+  });
+
+  originSearchBtn.addEventListener('click', async () => {
+    const q = originInput.value.trim();
+    originError.textContent = '';
+    if (!q) return;
+    originSearchBtn.disabled = true;
+    originSearchBtn.textContent = '…';
+    try {
+      const latlng = await geocode(q);
+      manualOriginLatLng = latlng;
+      setOriginMarker(latlng);
+      if (!hasCentered) { map.setView(latlng, 14); hasCentered = true; }
+      updateDestInfo();
+      maybeAutoRoute();
+    } catch (err) {
+      originError.textContent = err.message;
+    } finally {
+      originSearchBtn.disabled = false;
+      originSearchBtn.textContent = 'Valider';
+    }
+  });
+
+  destSearchBtn.addEventListener('click', async () => {
+    const q = destInput.value.trim();
+    destError.textContent = '';
+    if (!q) return;
+    destSearchBtn.disabled = true;
+    destSearchBtn.textContent = '…';
+    try {
+      const latlng = await geocode(q);
+      setDestination(latlng);
+      map.setView(latlng, 14);
+    } catch (err) {
+      destError.textContent = err.message;
+    } finally {
+      destSearchBtn.disabled = false;
+      destSearchBtn.textContent = 'Chercher';
+    }
+  });
+
+  function setDestination(latlng){
+    destLatLng = latlng;
+    if (!destMarker) {
+      destMarker = L.marker(destLatLng, {
+        icon: L.divIcon({
+          className: '',
+          html: '<div style="width:14px;height:14px;border-radius:50%;background:#5CA9FF;border:2px solid #0A0E12;"></div>',
+          iconSize: [14,14],
+          iconAnchor: [7,7]
+        })
+      }).addTo(map);
+    } else {
+      destMarker.setLatLng(destLatLng);
+    }
+    const origin = currentOrigin();
+    if (!routeLine) {
+      if (!destGuideLine) {
+        destGuideLine = L.polyline(origin ? [origin, destLatLng] : [destLatLng, destLatLng], {
+          color: '#5CA9FF', weight: 2, dashArray: '6 6', opacity: 0.5
+        }).addTo(map);
+      } else if (origin) {
+        destGuideLine.setLatLngs([origin, destLatLng]);
+      }
+    }
+    destHint.style.display = 'none';
+    destActive.style.display = 'block';
+    updateDestInfo();
+    maybeAutoRoute();
+    switchTab('go');
+  }
+
+  map.on('click', (e) => {
+    setDestination([e.latlng.lat, e.latlng.lng]);
+  });
+
+  destClearBtn.addEventListener('click', () => {
+    destLatLng = null;
+    destInput.value = '';
+    destError.textContent = '';
+    if (destMarker) { map.removeLayer(destMarker); destMarker = null; }
+    if (destGuideLine) { map.removeLayer(destGuideLine); destGuideLine = null; }
+    clearRoute();
+    destHint.style.display = 'block';
+    destActive.style.display = 'none';
+  });
+
+  routeCalcBtn.addEventListener('click', () => calculateTruckRoute());
+
+  function addTrackPoint(lat, lon, ele){
+    trackPoints.push({ lat, lon, ele: ele != null ? ele : null, t: new Date().toISOString() });
+    if (trackPoints.length > 1) {
+      const prev = trackPoints[trackPoints.length - 2];
+      trackDistanceM += haversine(prev.lat, prev.lon, lat, lon);
+    }
+    if (!trackLine) {
+      trackLine = L.polyline([[lat, lon]], { color: '#FFB238', weight: 3, opacity: 0.85 }).addTo(map);
+    } else {
+      trackLine.addLatLng([lat, lon]);
+    }
+    trackDistEl.innerHTML = (trackDistanceM >= 1000 ? (trackDistanceM/1000).toFixed(2) : Math.round(trackDistanceM)) +
+      '<span class="unit">' + (trackDistanceM >= 1000 ? 'km' : 'm') + '</span>';
+    trackPointsEl.textContent = trackPoints.length;
+    trackExportBtn.disabled = trackPoints.length === 0;
+  }
+
+  trackToggleBtn.addEventListener('click', () => {
+    tracking = !tracking;
+    trackToggleBtn.textContent = tracking ? 'Suspendre le suivi' : 'Suivre le trajet';
+    trackToggleBtn.classList.toggle('stop', tracking);
+  });
+
+  trackClearBtn.addEventListener('click', () => {
+    trackPoints = [];
+    trackDistanceM = 0;
+    if (trackLine) { map.removeLayer(trackLine); trackLine = null; }
+    trackDistEl.innerHTML = '0<span class="unit">m</span>';
+    trackPointsEl.textContent = '0';
+    trackExportBtn.disabled = true;
+  });
+
+  trackExportBtn.addEventListener('click', () => {
+    if (trackPoints.length === 0) return;
+    const pts = trackPoints.map(p =>
+      '      <trkpt lat="' + p.lat + '" lon="' + p.lon + '">' +
+      (p.ele != null ? '<ele>' + p.ele + '</ele>' : '') +
+      '<time>' + p.t + '</time></trkpt>'
+    ).join('\n');
+    const gpx = '<?xml version="1.0" encoding="UTF-8"?>\n' +
+      '<gpx version="1.1" creator="Position GPS Camion" xmlns="http://www.topografix.com/GPX/1/1">\n' +
+      '  <trk>\n    <name>Trajet camion</name>\n    <trkseg>\n' + pts + '\n    </trkseg>\n  </trk>\n</gpx>';
+    const blob = new Blob([gpx], { type: 'application/gpx+xml' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'trajet-camion-' + new Date().toISOString().slice(0,19).replace(/[:T]/g,'-') + '.gpx';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  });
+
+  // Routes principales / numérotées = navigables ; rues de quartier = interdites
+  function isForbiddenForTrucks(tags){
+    if (!tags) return false;
+
+    const majorRoads = ['motorway','trunk','primary','secondary','tertiary',
+      'motorway_link','trunk_link','primary_link','secondary_link','tertiary_link'];
+
+    if (majorRoads.includes(tags.highway) || tags.ref) return false;
+
+    if (tags.hgv === 'yes' || tags.hgv === 'designated' || tags.hgv === 'destination') return false;
+
+    if (tags.hgv === 'no' || tags.hgv === 'private') return true;
+    if (tags.motor_vehicle === 'no' || tags.motor_vehicle === 'private') return true;
+    if (tags.vehicle === 'no' || tags.vehicle === 'private') return true;
+    if (tags.access === 'no' || tags.access === 'private') return true;
+
+    const w = parseFloat(tags.maxweight);
+    if (!isNaN(w) && w < TRUCK.weight) return true;
+    const h = parseMaxheightMeters(tags.maxheight);
+    if (h != null && h < TRUCK.height) return true;
+
+    const localRoads = ['residential','living_street','service','unclassified'];
+    if (localRoads.includes(tags.highway)) return true;
+    return false;
+  }
+
+  async function fetchTruckRoadsAndBridges(){
+    const b = map.getBounds();
+    const bbox = b.getSouth() + ',' + b.getWest() + ',' + b.getNorth() + ',' + b.getEast();
+    const query =
+      '[out:json][timeout:25];(' +
+      'way["highway"]["highway"!~"^(footway|path|cycleway|steps|pedestrian|track|bridleway|corridor|proposed|construction)$"](' + bbox + ');' +
+      'node["maxheight"](' + bbox + ');' +
+      'way["maxheight"]["highway"](' + bbox + ');' +
+      'way["bridge"]["maxheight"](' + bbox + ');' +
+      ');out body; >; out skel qt;';
+    const res = await fetch(OVERPASS_URL, {
+      method: 'POST',
+      body: 'data=' + encodeURIComponent(query)
+    });
+    if (!res.ok) throw new Error('service indisponible');
+    return res.json();
+  }
+
+  function clearTruckLayers(){
+    if (truckAllowedLayer) { map.removeLayer(truckAllowedLayer); truckAllowedLayer = null; }
+    if (truckForbiddenLayer) { map.removeLayer(truckForbiddenLayer); truckForbiddenLayer = null; }
+    if (bridgeLayer) { map.removeLayer(bridgeLayer); bridgeLayer = null; }
+  }
+
+  async function refreshTruckLayer(){
+    if (map.getZoom() < 13) {
+      truckNote.textContent = 'Zoome jusqu\'au niveau rue pour charger les zones camion et les ponts bas.';
+      clearTruckLayers();
+      return;
+    }
+    if (truckLoading) return;
+    truckLoading = true;
+    truckNote.textContent = 'Chargement des routes camion et ponts bas…';
+    try {
+      const data = await fetchTruckRoadsAndBridges();
+      const nodes = {};
+      data.elements.forEach(el => {
+        if (el.type === 'node') nodes[el.id] = [el.lat, el.lon];
+      });
+
+      const allowedLines = [];
+      const forbiddenLines = [];
+      const lowBridges = [];
+
+      data.elements.forEach(el => {
+        if (el.type === 'node' && el.tags && el.tags.maxheight) {
+          const h = parseMaxheightMeters(el.tags.maxheight);
+          if (h != null && h < TRUCK.height) {
+            lowBridges.push({
+              latlng: [el.lat, el.lon],
+              height: h,
+              raw: el.tags.maxheight,
+              name: el.tags.name || 'Pont / passage bas'
+            });
+          }
+        }
+
+        if (el.type !== 'way' || !el.nodes) return;
+        const coords = el.nodes.map(id => nodes[id]).filter(Boolean);
+        if (coords.length < 2) return;
+
+        if (el.tags && el.tags.maxheight) {
+          const h = parseMaxheightMeters(el.tags.maxheight);
+          if (h != null && h < TRUCK.height) {
+            const mid = coords[Math.floor(coords.length / 2)];
+            lowBridges.push({
+              latlng: mid,
+              height: h,
+              raw: el.tags.maxheight,
+              name: (el.tags.name || 'Pont / passage bas')
+            });
+          }
+        }
+
+        if (!el.tags || !el.tags.highway) return;
+        if (isForbiddenForTrucks(el.tags)) forbiddenLines.push(coords);
+        else allowedLines.push(coords);
+      });
+
+      clearTruckLayers();
+
+      // Blanc pâle transparent = navigable camion
+      truckAllowedLayer = L.polyline(allowedLines, {
+        pane: 'truckPane',
+        color: '#FFFFFF',
+        weight: 4,
+        opacity: 0.35
+      }).addTo(map);
+
+      // Rouge = quartier / interdit
+      truckForbiddenLayer = L.polyline(forbiddenLines, {
+        pane: 'truckPane',
+        color: '#FF3B3B',
+        weight: 5,
+        opacity: 0.9
+      }).addTo(map);
+
+      bridgeLayer = L.layerGroup().addTo(map);
+      lowBridges.forEach((br) => {
+        const m = L.circleMarker(br.latlng, {
+          pane: 'bridgePane',
+          radius: 7,
+          color: '#0A0E12',
+          weight: 2,
+          fillColor: '#FFB238',
+          fillOpacity: 1
+        }).addTo(bridgeLayer);
+        m.bindPopup(
+          '<div class="bridge-popup"><strong>' + br.name + '</strong><br>' +
+          'Hauteur max : ' + br.height.toFixed(2) + ' m (' + br.raw + ')<br>' +
+          'Drybox ' + TRUCK.height.toFixed(2) + ' m → <span style="color:#FF3B3B">trop bas</span></div>'
+        );
+      });
+
+      truckNote.textContent =
+        allowedLines.length + ' route(s) navigable(s), ' +
+        forbiddenLines.length + ' zone(s) rouge(s), ' +
+        lowBridges.length + ' pont(s) bas dans la zone visible.';
+    } catch (err) {
+      truckNote.textContent = 'Impossible de charger les données (' + err.message + ').';
+    } finally {
+      truckLoading = false;
+    }
+  }
+
+  const debouncedRefreshTruckLayer = debounce(refreshTruckLayer, 600);
+  map.on('moveend', debouncedRefreshTruckLayer);
+  map.on('zoomend', debouncedRefreshTruckLayer);
+  map.whenReady(() => refreshTruckLayer());
+
+  function onPosition(pos){
+    const { latitude, longitude, accuracy, speed, altitude, heading } = pos.coords;
+
+    setStatus('live', 'position active');
+
+    latEl.textContent = 'LAT  ' + fmtCoord(latitude, 'N', 'S');
+    lonEl.textContent = 'LON  ' + fmtCoord(longitude, 'E', 'O');
+
+    speedEl.innerHTML = (speed != null ? Math.round(speed * 3.6) : '—') + '<span class="unit">km/h</span>';
+    altEl.innerHTML = (altitude != null ? Math.round(altitude) : '—') + '<span class="unit">m</span>';
+    accEl.innerHTML = Math.round(accuracy) + '<span class="unit">m</span>';
+
+    if (heading != null && !isNaN(heading)) {
+      needle.setAttribute('transform', 'rotate(' + Math.round(heading) + ' 50 50)');
+    }
+
+    const latlng = [latitude, longitude];
+    lastLatLng = latlng;
+
+    if (!marker) {
+      marker = L.circleMarker(latlng, {
+        radius: 7,
+        color: '#FFB238',
+        weight: 2,
+        fillColor: '#FFB238',
+        fillOpacity: 0.9
+      }).addTo(map);
+    } else {
+      marker.setLatLng(latlng);
+    }
+
+    if (!accuracyCircle) {
+      accuracyCircle = L.circle(latlng, {
+        radius: accuracy,
+        color: '#FFB238',
+        weight: 1,
+        fillColor: '#FFB238',
+        fillOpacity: 0.08
+      }).addTo(map);
+    } else {
+      accuracyCircle.setLatLng(latlng);
+      accuracyCircle.setRadius(accuracy);
+    }
+
+    if (!hasCentered) {
+      map.setView(latlng, 16);
+      hasCentered = true;
+    }
+
+    if (destLatLng) updateDestInfo();
+    if (tracking) addTrackPoint(latitude, longitude, altitude);
+    if (guidanceSteps.length) updateGuidance(latitude, longitude);
+  }
+
+  function onError(err){
+    setStatus('error', err.message || 'erreur de localisation');
+    stopWatch();
+  }
+
+  function startWatch(){
+    if (!navigator.geolocation) {
+      setStatus('error', 'géolocalisation indisponible');
+      return;
+    }
+    unlockSpeech();
+    setStatus('', 'recherche du signal…');
+    watchId = navigator.geolocation.watchPosition(onPosition, onError, {
+      enableHighAccuracy: true,
+      maximumAge: 1000,
+      timeout: 15000
+    });
+    toggleBtn.textContent = 'Arrêter';
+    toggleBtn.classList.add('stop');
+  }
+
+  function stopWatch(){
+    if (watchId != null) {
+      navigator.geolocation.clearWatch(watchId);
+      watchId = null;
+    }
+    toggleBtn.textContent = 'Activer la localisation';
+    toggleBtn.classList.remove('stop');
+    setStatus('', 'en attente');
+  }
+
+  toggleBtn.addEventListener('click', () => {
+    if (watchId == null) startWatch();
+    else stopWatch();
+  });
+
+  // Onglets style Google / Waze
+  function switchTab(name){
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.tab === name);
+    });
+    document.querySelectorAll('.tab-panel').forEach(panel => {
+      panel.classList.toggle('active', panel.dataset.panel === name);
+    });
+    setTimeout(() => { try { map.invalidateSize(); } catch (e) {} }, 50);
+  }
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+  });
+</script>
+
+</body>
+</html>
