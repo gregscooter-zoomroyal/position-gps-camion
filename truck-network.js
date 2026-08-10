@@ -855,6 +855,150 @@
     return ca !== 'other' && ca === cb;
   }
 
+  /**
+   * Hubs NA pour découper les longs trajets (Valhalla public ~1500 km max).
+   * Retourne [origin, ...vias, dest] avec chaque saut haversine < maxSegKm.
+   */
+  var LONG_HAUL_HUBS = [
+    // Canada
+    [45.50, -73.57], // Montréal
+    [46.81, -71.21], // Québec
+    [45.40, -71.90], // Sherbrooke
+    [43.65, -79.38], // Toronto
+    [42.98, -81.25], // London ON
+    [42.31, -83.04], // Windsor
+    [45.42, -75.70], // Ottawa
+    [49.90, -97.14], // Winnipeg
+    [50.45, -104.61], // Regina
+    [51.05, -114.07], // Calgary
+    [53.55, -113.49], // Edmonton
+    [49.28, -123.12], // Vancouver
+    // USA
+    [42.89, -78.88], // Buffalo
+    [42.33, -83.05], // Detroit
+    [41.50, -81.69], // Cleveland
+    [41.88, -87.63], // Chicago
+    [39.10, -94.58], // Kansas City
+    [38.63, -90.20], // St Louis
+    [35.47, -97.52], // Oklahoma City
+    [32.78, -96.80], // Dallas
+    [29.76, -95.37], // Houston
+    [27.50, -99.51], // Laredo
+    [31.76, -106.49], // El Paso
+    [33.45, -112.07], // Phoenix
+    [34.05, -118.24], // Los Angeles
+    [36.17, -115.14], // Las Vegas
+    [39.74, -104.99], // Denver
+    [47.61, -122.33], // Seattle
+    [44.98, -93.27], // Minneapolis
+    [33.75, -84.39], // Atlanta
+    [39.95, -75.17], // Philadelphia
+    [40.71, -74.01], // New York
+    [42.36, -71.06], // Boston
+    [35.23, -80.84], // Charlotte
+    [30.27, -97.74], // Austin
+    [29.42, -98.49], // San Antonio
+    // Mexique
+    [32.53, -117.04], // Tijuana
+    [28.63, -106.07], // Chihuahua
+    [25.69, -100.32], // Monterrey
+    [22.16, -100.99], // San Luis Potosí
+    [21.12, -101.68], // León
+    [20.67, -103.35], // Guadalajara
+    [19.43, -99.13], // CDMX
+    [19.05, -98.20]  // Puebla
+  ];
+
+  function longHaulCorridorPoints(origin, dest, maxSegKm) {
+    if (!origin || !dest) return null;
+    var maxM = (maxSegKm && maxSegKm > 0 ? maxSegKm : 1100) * 1000;
+    var direct = haversineM(origin[0], origin[1], dest[0], dest[1]);
+    if (direct <= maxM * 0.95) return [origin, dest];
+
+    var nodes = LONG_HAUL_HUBS.slice();
+    // Indices : 0 = origin, 1 = dest, 2.. = hubs
+    var pts = [origin, dest].concat(nodes);
+    var n = pts.length;
+    var dist = new Array(n);
+    var prev = new Array(n);
+    var i;
+    var j;
+    for (i = 0; i < n; i++) {
+      dist[i] = Infinity;
+      prev[i] = -1;
+    }
+    dist[0] = 0;
+    var visited = new Array(n);
+    for (i = 0; i < n; i++) visited[i] = false;
+
+    for (var iter = 0; iter < n; iter++) {
+      var u = -1;
+      var best = Infinity;
+      for (i = 0; i < n; i++) {
+        if (!visited[i] && dist[i] < best) {
+          best = dist[i];
+          u = i;
+        }
+      }
+      if (u < 0 || best === Infinity) break;
+      visited[u] = true;
+      if (u === 1) break;
+      for (j = 0; j < n; j++) {
+        if (visited[j]) continue;
+        var d = haversineM(pts[u][0], pts[u][1], pts[j][0], pts[j][1]);
+        if (d > maxM) continue;
+        // Légère pénalité hors corridor (éloignement de la ligne OD)
+        var detour = 0;
+        if (u !== 0 && j !== 1) {
+          var viaOd = haversineM(origin[0], origin[1], pts[j][0], pts[j][1]) +
+            haversineM(pts[j][0], pts[j][1], dest[0], dest[1]);
+          if (viaOd > direct * 1.55) continue;
+          detour = Math.max(0, viaOd - direct) * 0.15;
+        }
+        var nd = dist[u] + d + detour;
+        if (nd < dist[j]) {
+          dist[j] = nd;
+          prev[j] = u;
+        }
+      }
+    }
+
+    if (prev[1] < 0 || !isFinite(dist[1])) {
+      // Secours : interpolation le long du grand cercle
+      var steps = Math.ceil(direct / (maxM * 0.85));
+      var path = [origin];
+      for (i = 1; i < steps; i++) {
+        var t = i / steps;
+        path.push([
+          origin[0] + (dest[0] - origin[0]) * t,
+          origin[1] + (dest[1] - origin[1]) * t
+        ]);
+      }
+      path.push(dest);
+      return path;
+    }
+
+    var chain = [];
+    for (i = 1; i >= 0; ) {
+      chain.push(pts[i]);
+      if (i === 0) break;
+      i = prev[i];
+      if (i < 0) break;
+    }
+    chain.reverse();
+    // Dédupliquer points trop proches
+    var out = [chain[0]];
+    for (i = 1; i < chain.length; i++) {
+      var last = out[out.length - 1];
+      if (haversineM(last[0], last[1], chain[i][0], chain[i][1]) > 25000) {
+        out.push(chain[i]);
+      } else if (i === chain.length - 1) {
+        out[out.length - 1] = chain[i];
+      }
+    }
+    return out;
+  }
+
   function styleForRole(role) {
     if (role === 'allowed') return { color: '#4ADE80', weight: 4, opacity: 0.75 };
     if (role === 'forbidden') return { color: '#FF3B3B', weight: 5, opacity: 0.9 };
@@ -883,6 +1027,7 @@
     tripCrossesIntoCountry: tripCrossesIntoCountry,
     routeLeavesCountry: routeLeavesCountry,
     domesticViaCandidates: domesticViaCandidates,
+    longHaulCorridorPoints: longHaulCorridorPoints,
     canadaUsBorderExcludeLocations: canadaUsBorderExcludeLocations,
     borderExcludeLocationsForDomestic: borderExcludeLocationsForDomestic,
     tripHasForeignHighwayNames: tripHasForeignHighwayNames,

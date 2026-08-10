@@ -828,7 +828,7 @@
       <div class="check-list">
         <label><input type="checkbox" id="opt-tolls"> Péages</label>
         <label><input type="checkbox" id="opt-ferries"> Traversiers / ferries</label>
-        <label><input type="checkbox" id="opt-borders" checked> Sans frontière CA/US/MX (pas de passeport)</label>
+        <label><input type="checkbox" id="opt-borders" checked> Même pays = sans frontière (CA/US/MX)</label>
         <label><input type="checkbox" id="opt-traffic" checked> ETA avec trafic estimé</label>
       </div>
     </div>
@@ -949,8 +949,8 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
-<script src="./nav-pro.js?v=10"></script>
-<script src="./truck-network.js?v=10"></script>
+<script src="./nav-pro.js?v=12"></script>
+<script src="./truck-network.js?v=12"></script>
 <script>
   // Profil véhicule (Navigation Pro) — comptes reportés à plus tard
   let TRUCK = Object.assign({ hazmat: false }, NavPro.getActiveVehicleProfile());
@@ -1576,17 +1576,54 @@
     if (!block) return opts;
     block.use_tolls = routeOpts.avoidTolls ? 0 : 0.8;
     block.use_ferry = routeOpts.avoidFerries ? 0 : 0.5;
-    // Valhalla truck ignore souvent ce pénalité → on filtre aussi côté app
-    const avoid = !!(forceAvoidBorders || routeOpts.avoidBorders);
+    // true = forcer sans frontière ; false = autoriser frontière (international) ;
+    // undefined = suivre la case UI
+    let avoid;
+    if (forceAvoidBorders === true) avoid = true;
+    else if (forceAvoidBorders === false) avoid = false;
+    else avoid = !!routeOpts.avoidBorders;
     block.country_crossing_penalty = avoid ? 60000 : 0;
     block.country_crossing_cost = avoid ? 60000 : 0;
     return opts;
   }
 
-  async function fetchValhallaTrip(costing, costingOptions, excludePolygons, viaLatLngs, excludeLocations){
+  function isValhallaMaxDistanceError(err) {
+    const msg = (err && err.message) ? String(err.message) : String(err || '');
+    return /max distance|exceeds the max|1500000/i.test(msg);
+  }
+
+  function stitchValhallaTrips(trips) {
+    if (!trips || !trips.length) return null;
+    if (trips.length === 1) return trips[0];
+    const legs = [];
+    let time = 0;
+    let length = 0;
+    trips.forEach((t) => {
+      (t.legs || []).forEach((leg) => legs.push(leg));
+      time += (t.summary && t.summary.time) || 0;
+      length += (t.summary && t.summary.length) || 0;
+    });
+    return {
+      legs: legs,
+      summary: {
+        time: time,
+        length: length,
+        min_lat: trips[0].summary && trips[0].summary.min_lat,
+        min_lon: trips[0].summary && trips[0].summary.min_lon,
+        max_lat: trips[trips.length - 1].summary && trips[trips.length - 1].summary.max_lat,
+        max_lon: trips[trips.length - 1].summary && trips[trips.length - 1].summary.max_lon
+      },
+      status: 0,
+      status_message: 'stitched',
+      units: trips[0].units,
+      language: trips[0].language
+    };
+  }
+
+  async function fetchValhallaRaw(locations, costing, costingOptions, excludePolygons, excludeLocations) {
     const body = {
-      locations: buildRouteLocations(viaLatLngs),
-      costing,
+      locations: locations,
+      costing: costing,
       costing_options: costingOptions,
       directions_options: { units: 'kilometers', language: 'fr-FR' }
     };
@@ -1596,7 +1633,6 @@
     if (excludeLocations && excludeLocations.length) {
       body.exclude_locations = excludeLocations.slice(0, 48);
     }
-    // POST : les exclude_polygons en GET dépassent souvent la limite d'URL (414)
     const res = await fetch(VALHALLA_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
@@ -1607,6 +1643,41 @@
       throw new Error((data && (data.error || data.error_message)) || 'itinéraire impossible');
     }
     return data.trip;
+  }
+
+  async function fetchValhallaTrip(costing, costingOptions, excludePolygons, viaLatLngs, excludeLocations){
+    return fetchValhallaRaw(
+      buildRouteLocations(viaLatLngs),
+      costing,
+      costingOptions,
+      excludePolygons,
+      excludeLocations
+    );
+  }
+
+  /** Découpe un long trajet en segments < ~1100 km (limite Valhalla publique ~1500 km). */
+  async function fetchSegmentedTrip(costing, costingOptions, originLL, destLL) {
+    if (!originLL || !destLL || typeof TruckNetwork.longHaulCorridorPoints !== 'function') {
+      throw new Error('corridor long trajet indisponible');
+    }
+    const points = TruckNetwork.longHaulCorridorPoints(originLL, destLL, 1100);
+    if (!points || points.length < 2) throw new Error('aucun corridor long trajet');
+    routeNote.textContent = 'Long trajet : calcul en ' + (points.length - 1) + ' segments…';
+    const trips = [];
+    for (let i = 0; i < points.length - 1; i++) {
+      const a = points[i];
+      const b = points[i + 1];
+      routeNote.textContent = 'Segment ' + (i + 1) + '/' + (points.length - 1) + '…';
+      const locs = [
+        { lat: a[0], lon: a[1], type: 'break' },
+        { lat: b[0], lon: b[1], type: 'break' }
+      ];
+      const trip = await fetchValhallaRaw(locs, costing, costingOptions, null, null);
+      trips.push(trip);
+    }
+    const stitched = stitchValhallaTrips(trips);
+    if (!stitched) throw new Error('assemblage long trajet échoué');
+    return stitched;
   }
 
   let officialNetLayer = null;
@@ -1824,22 +1895,29 @@
       const destCountry = typeof TruckNetwork.guessCountry === 'function'
         ? TruckNetwork.guessCountry(destLatLng[0], destLatLng[1])
         : 'other';
-      // CA→CA / US→US / MX→MX : TOUJOURS rester au pays (passeport non requis)
+      // CA→CA / US→US / MX→MX : jamais de frontière.
+      // Trajet international (ex. CA→US / CA→MX) : frontière autorisée, itinéraire calculé normalement.
       const sameCountry = originCountry !== 'other' && originCountry === destCountry;
-      const stayDomestic = sameCountry || !!routeOpts.avoidBorders;
+      const internationalTrip = originCountry !== 'other' && destCountry !== 'other' && originCountry !== destCountry;
+      const stayDomestic = sameCountry; // uniquement si même pays — ne bloque plus les destinations US/MX
       const longHaul = haversine(origin[0], origin[1], destLatLng[0], destLatLng[1]) > 120000;
       const forceBorders = stayDomestic;
       const borderExcludeLocs = (stayDomestic && originCountry !== 'other'
         && typeof TruckNetwork.borderExcludeLocationsForDomestic === 'function')
         ? TruckNetwork.borderExcludeLocationsForDomestic(originCountry)
-        : (stayDomestic && originCountry === 'CA'
-          && typeof TruckNetwork.canadaUsBorderExcludeLocations === 'function'
-          ? TruckNetwork.canadaUsBorderExcludeLocations()
-          : null);
+        : null;
       const domesticVias = (stayDomestic && typeof TruckNetwork.domesticViaCandidates === 'function')
         ? TruckNetwork.domesticViaCandidates(origin, destLatLng)
         : [];
 
+      // Destination hors pays : décocher « sans frontière » pour refléter le passage requis
+      if (internationalTrip) {
+        const borderEl = document.getElementById('opt-borders');
+        if (borderEl && borderEl.checked) {
+          borderEl.checked = false;
+          try { NavPro.setRouteOptions({ avoidBorders: false }); } catch (e) { /* ignore */ }
+        }
+      }
       const truckFastOpts = applyAvoidOptions('truck', { truck: Object.assign({}, truckBase) }, forceBorders);
       const truckStrictOpts = applyAvoidOptions('truck', { truck: Object.assign({}, truckStrictBase) }, forceBorders);
       const truckHwyOpts = applyAvoidOptions('truck', {
@@ -1945,8 +2023,82 @@
         let ranked = [];
         let best = null;
 
-        // A) Long trajet même pays : forcer d'abord un corridor domestique
-        if (stayDomestic && longHaul && domesticVias.length) {
+        // —— Trajet international (CA→US, CA→MX, etc.) : autoriser la frontière ——
+        if (!stayDomestic) {
+          routeNote.textContent = 'Calcul itinéraire international (' + originCountry + ' → ' + destCountry + ')…';
+          const odKm = haversine(origin[0], origin[1], destLatLng[0], destLatLng[1]) / 1000;
+          const needsSegments = odKm > 1300;
+
+          async function tryInternational(costing, opts, label) {
+            try {
+              if (!needsSegments) {
+                const direct = await fetchValhallaTrip(costing, opts, excludes, null, null);
+                if (direct) {
+                  return {
+                    best: {
+                      trip: direct,
+                      usedExcludes: !!(excludes && excludes.length),
+                      score: scoreTripCandidate(direct, false)
+                    },
+                    ranked: [],
+                    netInfoExtra: label
+                  };
+                }
+              }
+            } catch (e) {
+              if (!isValhallaMaxDistanceError(e) && !needsSegments) {
+                /* try segments below */
+              }
+            }
+            try {
+              const seg = await fetchSegmentedTrip(costing, opts, origin, destLatLng);
+              if (seg) {
+                return {
+                  best: {
+                    trip: seg,
+                    usedExcludes: false,
+                    score: scoreTripCandidate(seg, false)
+                  },
+                  ranked: [],
+                  netInfoExtra: label + ' · multi-segments'
+                };
+              }
+            } catch (e2) { /* ignore */ }
+            return null;
+          }
+
+          if (!needsSegments) {
+            ranked = await gatherTruckTrips(excludes);
+            best = pickBest(ranked);
+            if (best) {
+              return {
+                best,
+                ranked,
+                netInfoExtra: 'international · ' + originCountry + '→' + destCountry
+              };
+            }
+          }
+
+          const truckIntl = await tryInternational(
+            'truck',
+            truckHwyOpts,
+            'camion · international · ' + originCountry + '→' + destCountry
+          );
+          if (truckIntl) return truckIntl;
+
+          const autoIntl = await tryInternational(
+            'auto',
+            applyAvoidOptions('auto', { auto: {} }, false),
+            'réseau routier · international · passeport requis'
+          );
+          if (autoIntl) return autoIntl;
+
+          throw new Error('Aucun itinéraire ' + originCountry + ' → ' + destCountry + ' trouvé');
+        }
+
+        // —— Même pays : jamais de frontière ——
+        // A) Long trajet : forcer d'abord un corridor domestique
+        if (longHaul && domesticVias.length) {
           routeNote.textContent = 'Calcul sans frontière (corridor ' + originCountry + ')…';
           const autoFirst = await tryAutoDomestic(excludes, [domesticVias[0]], originCountry + ' · via corridor · plus rapide');
           if (autoFirst) return autoFirst;
@@ -1963,7 +2115,7 @@
         if (best) return { best, ranked, netInfoExtra: '' };
 
         // C) Vias domestiques camion puis auto
-        if (stayDomestic && domesticVias.length) {
+        if (domesticVias.length) {
           routeNote.textContent = 'Recalcul sans frontière (points de passage au pays)…';
           for (let i = 0; i < domesticVias.length; i++) {
             const viaSet = domesticVias.slice(0, i + 1);
@@ -1978,13 +2130,10 @@
         }
 
         // D) Auto direct sans frontière
-        if (stayDomestic) {
-          routeNote.textContent = 'Secours réseau routier sans frontière…';
-          const autoDirect = await tryAutoDomestic(excludes, null, 'réseau routier · sans frontière');
-          if (autoDirect) return autoDirect;
-        }
+        routeNote.textContent = 'Secours réseau routier sans frontière…';
+        const autoDirect = await tryAutoDomestic(excludes, null, 'réseau routier · sans frontière');
+        if (autoDirect) return autoDirect;
 
-        if (!stayDomestic && ranked.length) return { best: ranked[0], ranked, netInfoExtra: '' };
         throw new Error(originCountry + ' → ' + destCountry + ' : aucun itinéraire sans frontière trouvé');
       }
 
@@ -2000,7 +2149,9 @@
       // 1) Calcul d'itinéraire immédiatement (ne pas attendre le WFS)
       routeNote.textContent = sameCountry
         ? ('Calcul ' + originCountry + ' → ' + destCountry + ' sans frontière…')
-        : 'Calcul du chemin le plus rapide…';
+        : internationalTrip
+          ? ('Calcul international ' + originCountry + ' → ' + destCountry + '…')
+          : 'Calcul du chemin le plus rapide…';
       const netPromise = loadOfficialTruckNetworkForRoute().catch((e) => {
         return { forbidden: [], allowed: [], caution: [], all: [], sourcesUsed: [], _error: e.message || String(e) };
       });
@@ -2027,9 +2178,9 @@
         netInfo = ensured.netInfoExtra || 'reste au pays';
       }
 
-      // 4) Évitement no-truck : toujours, sans frontière ni gros détour
+      // 4) Évitement no-truck (même pays seulement — en international le tracé quitte le pays)
       const useExclude = document.getElementById('net-exclude');
-      if (net && net.forbidden && net.forbidden.length &&
+      if (stayDomestic && net && net.forbidden && net.forbidden.length &&
           (!useExclude || useExclude.checked) && best && !crossesForeign(best.trip)) {
         try {
           const softPts = [origin, destLatLng].filter(Boolean);
@@ -2098,7 +2249,8 @@
       let modeNote = crossesForeign(trip)
         ? 'passage frontière'
         : (excludePolygons.length ? 'plus rapide · no-truck évités · sans frontière' : 'plus rapide · sans frontière');
-      if (routeOpts.avoidBorders || sameCountry) modeNote += ' · pas de passeport requis';
+      if (sameCountry) modeNote += ' · pas de passeport requis';
+      else if (internationalTrip || crossesForeign(trip)) modeNote += ' · passeport requis';
       if (stayDomestic && !crossesForeign(trip)) modeNote += ' · reste au pays';
       const localKm = summarizeLocalStreetKm(trip);
       if (localKm > 1.5) modeNote += ' · ~' + localKm.toFixed(1) + ' km rues locales';
