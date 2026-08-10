@@ -1613,11 +1613,21 @@
     }
     const bbox = TruckNetwork.bboxFromPoints(pts, pad);
     if (!bbox) return { forbidden: [], allowed: [], caution: [], all: [], sourcesUsed: [] };
+    const inQc = typeof TruckNetwork.centeredInQuebec === 'function' && TruckNetwork.centeredInQuebec(bbox);
     const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
     const timer = controller ? setTimeout(() => controller.abort(), 4500) : null;
     try {
-      // fetch with timeout via Promise.race
-      const netPromise = TruckNetwork.fetchNetworksForBbox(bbox);
+      // Affiche d'abord les rouges, puis complète pour les excludes d'itinéraire
+      TruckNetwork.fetchNetworksForBbox(bbox, { forbiddenOnly: true, maxFeatures: 1000, skipUS: true })
+        .then((red) => {
+          lastOfficialNet = red;
+          renderOfficialTruckNetwork(red, { redOnly: true });
+        })
+        .catch(() => {});
+      const netPromise = TruckNetwork.fetchNetworksForBbox(bbox, {
+        maxFeatures: 800,
+        skipUS: inQc
+      });
       const net = controller
         ? await Promise.race([
             netPromise,
@@ -1635,7 +1645,13 @@
     }
   }
 
-  function renderOfficialTruckNetwork(net){
+  // Canvas = beaucoup plus rapide que SVG pour des centaines de polylines no-truck
+  const truckCanvasRenderer = (typeof L !== 'undefined' && L.canvas)
+    ? L.canvas({ padding: 0.35 })
+    : null;
+
+  function renderOfficialTruckNetwork(net, drawOpts){
+    drawOpts = drawOpts || {};
     if (officialNetLayer) { map.removeLayer(officialNetLayer); officialNetLayer = null; }
     const enabled = document.getElementById('net-official');
     if (enabled && !enabled.checked) {
@@ -1646,40 +1662,94 @@
     if (!net || !net.all || !net.all.length) return;
     officialNetLayer = L.layerGroup().addTo(map);
     const zoom = map.getZoom();
-    const maxDraw = zoom >= 12 ? 900 : zoom >= 10 ? 400 : 150;
+    const redOnly = !!drawOpts.redOnly || (net.forbidden.length && !net.allowed.length && !net.caution.length);
+    // Priorité rouge : budget plus large pour les no-truck
+    const maxDraw = zoom >= 12 ? 700 : zoom >= 10 ? 350 : 120;
+    const redBudget = redOnly ? maxDraw : Math.floor(maxDraw * 0.75);
+    const otherBudget = redOnly ? 0 : Math.floor(maxDraw * 0.25);
     const drawList = []
-      .concat(net.forbidden.slice(0, Math.floor(maxDraw * 0.5)))
-      .concat(net.caution.slice(0, Math.floor(maxDraw * 0.2)))
-      .concat(net.allowed.slice(0, Math.floor(maxDraw * 0.3)));
+      .concat(net.forbidden.slice(0, redBudget))
+      .concat(redOnly ? [] : net.caution.slice(0, Math.floor(otherBudget * 0.4)))
+      .concat(redOnly ? [] : net.allowed.slice(0, Math.floor(otherBudget * 0.6)));
+    const step = zoom < 11 ? 4 : zoom < 13 ? 2 : 1;
     drawList.forEach((seg) => {
       const g = seg.geometry;
       if (!g) return;
       const parts = g.type === 'MultiLineString' ? g.coordinates
         : g.type === 'LineString' ? [g.coordinates] : [];
-      const style = Object.assign({ pane: 'truckPane' }, TruckNetwork.styleForRole(seg.role));
+      const style = Object.assign(
+        { pane: 'truckPane', interactive: seg.role === 'forbidden' },
+        TruckNetwork.styleForRole(seg.role)
+      );
+      if (truckCanvasRenderer) style.renderer = truckCanvasRenderer;
       parts.forEach((line) => {
-        // simplifier : 1 point sur 3 hors zoom rue
-        const step = zoom < 12 ? 3 : 1;
         const latlngs = [];
         for (let i = 0; i < line.length; i += step) latlngs.push([line[i][1], line[i][0]]);
         if (line.length && (latlngs.length === 0 || latlngs[latlngs.length - 1][0] !== line[line.length - 1][1])) {
           latlngs.push([line[line.length - 1][1], line[line.length - 1][0]]);
         }
         if (latlngs.length < 2) return;
-        L.polyline(latlngs, style)
-          .bindPopup('<strong>' + (seg.name || seg.label) + '</strong><br>' +
+        const pl = L.polyline(latlngs, style);
+        // Popup seulement sur les rouges (moins de listeners)
+        if (seg.role === 'forbidden') {
+          pl.bindPopup('<strong>' + (seg.name || seg.label) + '</strong><br>' +
             seg.label + (seg.city ? '<br>' + seg.city : '') +
-            '<br><span style="opacity:.7">' + seg.source + '</span>')
-          .addTo(officialNetLayer);
+            '<br><span style="opacity:.7">' + seg.source + '</span>');
+        }
+        pl.addTo(officialNetLayer);
       });
     });
     const note = document.getElementById('net-note');
     if (note) {
       note.textContent = (net.sourcesUsed.join(' + ') || 'aucune source') +
-        ' · ' + net.allowed.length + ' transit · ' +
-        net.caution.length + ' restreint · ' +
-        net.forbidden.length + ' no-truck';
+        (redOnly ? ' · rouges prioritaires' : '') +
+        ' · ' + net.forbidden.length + ' no-truck' +
+        (net.caution.length ? ' · ' + net.caution.length + ' restreint' : '') +
+        (net.allowed.length ? ' · ' + net.allowed.length + ' transit' : '');
     }
+  }
+
+  let mapNetLoadGen = 0;
+  async function loadMapOfficialNetwork(){
+    if (!document.getElementById('net-official')?.checked) return;
+    if (!window.TruckNetwork) return;
+    if (map.getZoom() < 10) return;
+    const b = {
+      south: map.getBounds().getSouth(),
+      west: map.getBounds().getWest(),
+      north: map.getBounds().getNorth(),
+      east: map.getBounds().getEast()
+    };
+    if ((b.north - b.south) > 0.8 || (b.east - b.west) > 1.0) return;
+    const inQc = typeof TruckNetwork.centeredInQuebec === 'function'
+      ? TruckNetwork.centeredInQuebec(b)
+      : ((b.south + b.north) / 2 >= 45 && (b.west + b.east) / 2 <= -71 && (b.west + b.east) / 2 >= -79.5);
+    const gen = ++mapNetLoadGen;
+    try {
+      // Phase 1 : rouges seulement (affichage rapide)
+      const red = await TruckNetwork.fetchNetworksForBbox(b, {
+        forbiddenOnly: true,
+        maxFeatures: 1000,
+        skipUS: true
+      });
+      if (gen !== mapNetLoadGen) return;
+      lastOfficialNet = red;
+      renderOfficialTruckNetwork(red, { redOnly: true });
+      // Phase 2 : reste (transit / restreint) en différé — non bloquant
+      setTimeout(async () => {
+        if (gen !== mapNetLoadGen) return;
+        try {
+          if (!document.getElementById('net-official')?.checked) return;
+          const full = await TruckNetwork.fetchNetworksForBbox(b, {
+            maxFeatures: 600,
+            skipUS: inQc
+          });
+          if (gen !== mapNetLoadGen) return;
+          lastOfficialNet = full;
+          renderOfficialTruckNetwork(full, { redOnly: false });
+        } catch (e) { /* ignore */ }
+      }, 900);
+    } catch (e) { /* ignore */ }
   }
 
   async function calculateTruckRoute(){
@@ -1753,6 +1823,7 @@
       }
 
       async function gatherTruckTrips(excludes) {
+        // 1 requête principale + 1 secours max (évite 3 Valhalla en parallèle)
         const mildOpts = applyAvoidOptions('truck', {
           truck: Object.assign({}, truckBase, {
             use_truck_route: stayDomestic ? 0.4 : 1,
@@ -1761,21 +1832,27 @@
             service_factor: stayDomestic && longHaul ? 2 : truckBase.service_factor
           })
         });
-        const results = await Promise.allSettled([
-          fetchValhallaTrip('truck', truckOpts, excludes),
-          fetchValhallaTrip('truck', truckHwyOpts, excludes),
-          fetchValhallaTrip('truck', mildOpts, null)
-        ]);
         const scored = [];
-        results.forEach((r, idx) => {
-          if (r.status !== 'fulfilled' || !r.value) return;
-          const usedExcludes = !!(excludes && excludes.length && idx < 2);
-          scored.push({ trip: r.value, usedExcludes, score: scoreTripCandidate(r.value, usedExcludes) });
-        });
-        if (!scored.length) {
-          const err = results.find(r => r.status === 'rejected');
-          throw new Error((err && err.reason && err.reason.message) || 'itinéraire impossible');
+        try {
+          const trip = await fetchValhallaTrip('truck', truckOpts, excludes);
+          scored.push({ trip, usedExcludes: !!(excludes && excludes.length), score: scoreTripCandidate(trip, !!(excludes && excludes.length)) });
+        } catch (e) {
+          try {
+            const trip = await fetchValhallaTrip('truck', truckHwyOpts, excludes);
+            scored.push({ trip, usedExcludes: !!(excludes && excludes.length), score: scoreTripCandidate(trip, !!(excludes && excludes.length)) });
+          } catch (e2) {
+            const trip = await fetchValhallaTrip('truck', mildOpts, null);
+            scored.push({ trip, usedExcludes: false, score: scoreTripCandidate(trip, false) });
+          }
         }
+        // Variante autoroutière en parallèle seulement si long trajet (meilleure chance Canada)
+        if (longHaul || stayDomestic) {
+          try {
+            const hwy = await fetchValhallaTrip('truck', truckHwyOpts, excludes);
+            scored.push({ trip: hwy, usedExcludes: !!(excludes && excludes.length), score: scoreTripCandidate(hwy, !!(excludes && excludes.length)) });
+          } catch (e) { /* ignore */ }
+        }
+        if (!scored.length) throw new Error('itinéraire impossible');
         scored.sort((a, b) => b.score - a.score);
         return scored;
       }
@@ -1889,7 +1966,8 @@
       if (!navMode) map.fitBounds(routeLine.getBounds(), { padding: [40, 40] });
       startGuidance(trip);
       if (lastLatLng) updateGuidance(lastLatLng[0], lastLatLng[1]);
-      scanRouteForLowBridges();
+      // Ponts bas Overpass en différé (non bloquant pour l'itinéraire / GPS)
+      setTimeout(() => { scanRouteForLowBridges(); }, 1500);
     } catch (err) {
       clearRoute();
       routeNote.textContent = 'Impossible de calculer l\'itinéraire (' + err.message + ').';
@@ -2076,42 +2154,16 @@
     URL.revokeObjectURL(url);
   });
 
-  // Routes principales / numérotées = navigables ; rues de quartier = interdites
-  function isForbiddenForTrucks(tags){
-    if (!tags) return false;
-
-    const majorRoads = ['motorway','trunk','primary','secondary','tertiary',
-      'motorway_link','trunk_link','primary_link','secondary_link','tertiary_link'];
-
-    if (majorRoads.includes(tags.highway) || tags.ref) return false;
-
-    if (tags.hgv === 'yes' || tags.hgv === 'designated' || tags.hgv === 'destination') return false;
-
-    if (tags.hgv === 'no' || tags.hgv === 'private') return true;
-    if (tags.motor_vehicle === 'no' || tags.motor_vehicle === 'private') return true;
-    if (tags.vehicle === 'no' || tags.vehicle === 'private') return true;
-    if (tags.access === 'no' || tags.access === 'private') return true;
-
-    const w = parseFloat(tags.maxweight);
-    if (!isNaN(w) && w < TRUCK.weight) return true;
-    const h = parseMaxheightMeters(tags.maxheight);
-    if (h != null && h < TRUCK.height) return true;
-
-    const localRoads = ['residential','living_street','service','unclassified'];
-    if (localRoads.includes(tags.highway)) return true;
-    return false;
-  }
-
-  async function fetchTruckRoadsAndBridges(){
+  // isForbiddenForTrucks retiré : le rouge OSM doublonnait le MTQ et saturait Overpass.
+  async function fetchLowBridgesOnly(){
     const b = map.getBounds();
     const bbox = b.getSouth() + ',' + b.getWest() + ',' + b.getNorth() + ',' + b.getEast();
+    // Requête légère : uniquement hauteurs max (pas toutes les ways highway)
     const query =
-      '[out:json][timeout:25];(' +
-      'way["highway"]["highway"!~"^(footway|path|cycleway|steps|pedestrian|track|bridleway|corridor|proposed|construction)$"](' + bbox + ');' +
+      '[out:json][timeout:12];(' +
       'node["maxheight"](' + bbox + ');' +
-      'way["maxheight"]["highway"](' + bbox + ');' +
-      'way["bridge"]["maxheight"](' + bbox + ');' +
-      ');out body; >; out skel qt;';
+      'way["maxheight"]["bridge"](' + bbox + ');' +
+      ');out body center;';
     const res = await fetch(OVERPASS_URL, {
       method: 'POST',
       body: 'data=' + encodeURIComponent(query)
@@ -2126,78 +2178,41 @@
     if (bridgeLayer) { map.removeLayer(bridgeLayer); bridgeLayer = null; }
   }
 
+  /**
+   * Ancien Overpass « toutes les rues » retiré : trop lourd et doublonnait le MTQ rouge.
+   * On ne charge plus que les ponts bas au zoom rue.
+   */
   async function refreshTruckLayer(){
-    if (map.getZoom() < 13) {
-      truckNote.textContent = 'Zoome jusqu\'au niveau rue pour charger les zones camion et les ponts bas.';
-      clearTruckLayers();
+    if (map.getZoom() < 14) {
+      truckNote.textContent = 'Zoome au niveau rue pour les ponts bas (rouges = réseau officiel MTQ).';
+      if (bridgeLayer) { map.removeLayer(bridgeLayer); bridgeLayer = null; }
       return;
     }
     if (truckLoading) return;
     truckLoading = true;
-    truckNote.textContent = 'Chargement des routes camion et ponts bas…';
+    truckNote.textContent = 'Chargement des ponts bas…';
     try {
-      const data = await fetchTruckRoadsAndBridges();
-      const nodes = {};
-      data.elements.forEach(el => {
-        if (el.type === 'node') nodes[el.id] = [el.lat, el.lon];
-      });
-
-      const allowedLines = [];
-      const forbiddenLines = [];
+      const data = await fetchLowBridgesOnly();
       const lowBridges = [];
-
-      data.elements.forEach(el => {
-        if (el.type === 'node' && el.tags && el.tags.maxheight) {
-          const h = parseMaxheightMeters(el.tags.maxheight);
-          if (h != null && h < TRUCK.height) {
-            lowBridges.push({
-              latlng: [el.lat, el.lon],
-              height: h,
-              raw: el.tags.maxheight,
-              name: el.tags.name || 'Pont / passage bas'
-            });
-          }
-        }
-
-        if (el.type !== 'way' || !el.nodes) return;
-        const coords = el.nodes.map(id => nodes[id]).filter(Boolean);
-        if (coords.length < 2) return;
-
-        if (el.tags && el.tags.maxheight) {
-          const h = parseMaxheightMeters(el.tags.maxheight);
-          if (h != null && h < TRUCK.height) {
-            const mid = coords[Math.floor(coords.length / 2)];
-            lowBridges.push({
-              latlng: mid,
-              height: h,
-              raw: el.tags.maxheight,
-              name: (el.tags.name || 'Pont / passage bas')
-            });
-          }
-        }
-
-        if (!el.tags || !el.tags.highway) return;
-        if (isForbiddenForTrucks(el.tags)) forbiddenLines.push(coords);
-        else allowedLines.push(coords);
+      (data.elements || []).forEach((el) => {
+        const tags = el.tags || {};
+        const h = parseMaxheightMeters(tags.maxheight);
+        if (h == null || h >= TRUCK.height) return;
+        const lat = el.lat || (el.center && el.center.lat);
+        const lon = el.lon || (el.center && el.center.lon);
+        if (lat == null || lon == null) return;
+        lowBridges.push({
+          latlng: [lat, lon],
+          height: h,
+          raw: tags.maxheight,
+          name: tags.name || 'Pont / passage bas'
+        });
       });
 
-      clearTruckLayers();
-
-      // Blanc pâle transparent = navigable camion
-      truckAllowedLayer = L.polyline(allowedLines, {
-        pane: 'truckPane',
-        color: '#FFFFFF',
-        weight: 4,
-        opacity: 0.35
-      }).addTo(map);
-
-      // Rouge = quartier / interdit
-      truckForbiddenLayer = L.polyline(forbiddenLines, {
-        pane: 'truckPane',
-        color: '#FF3B3B',
-        weight: 5,
-        opacity: 0.9
-      }).addTo(map);
+      if (bridgeLayer) { map.removeLayer(bridgeLayer); bridgeLayer = null; }
+      // Plus de couches blanches/rouges OSM (réseau officiel suffit)
+      if (truckAllowedLayer) { map.removeLayer(truckAllowedLayer); truckAllowedLayer = null; }
+      if (truckForbiddenLayer) { map.removeLayer(truckForbiddenLayer); truckForbiddenLayer = null; }
 
       bridgeLayer = L.layerGroup().addTo(map);
       lowBridges.forEach((br) => {
@@ -2216,21 +2231,18 @@
         );
       });
 
-      truckNote.textContent =
-        allowedLines.length + ' route(s) navigable(s), ' +
-        forbiddenLines.length + ' zone(s) rouge(s), ' +
-        lowBridges.length + ' pont(s) bas dans la zone visible.';
+      truckNote.textContent = lowBridges.length + ' pont(s) bas · rouges = réseau officiel (onglet Réseau).';
     } catch (err) {
-      truckNote.textContent = 'Impossible de charger les données (' + err.message + ').';
+      truckNote.textContent = 'Ponts bas indisponibles (' + err.message + ').';
     } finally {
       truckLoading = false;
     }
   }
 
-  const debouncedRefreshTruckLayer = debounce(refreshTruckLayer, 600);
+  const debouncedRefreshTruckLayer = debounce(refreshTruckLayer, 1800);
   map.on('moveend', debouncedRefreshTruckLayer);
   map.on('zoomend', debouncedRefreshTruckLayer);
-  map.whenReady(() => refreshTruckLayer());
+  // Pas de chargement immédiat Overpass au démarrage (laisse le GPS + MTQ rouge partir)
 
   function onPosition(pos){
     const { latitude, longitude, accuracy, speed, altitude, heading } = pos.coords;
@@ -2561,10 +2573,11 @@
     }
   }
 
-  // Road info: speed limit + lanes via Overpass
+  // Road info: speed limit + lanes via Overpass (ralenti pour ne pas concurrencer le MTQ)
   async function maybeRefreshRoadInfo(lat, lon){
-    if (Date.now() - lastRoadInfoAt < 12000) return;
+    if (Date.now() - lastRoadInfoAt < 25000) return;
     lastRoadInfoAt = Date.now();
+    if (map.getZoom() < 15) return;
     const d = 0.0007;
     const bbox = (lat - d) + ',' + (lon - d) + ',' + (lat + d) + ',' + (lon + d);
     const query = '[out:json][timeout:15];way["highway"](' + bbox + ');out tags center 8;';
@@ -2701,7 +2714,7 @@
       document.getElementById('poi-note').textContent = 'POI indisponibles (' + err.message + ').';
     }
   }
-  const debouncedPoi = debounce(refreshPoiLayer, 700);
+  const debouncedPoi = debounce(refreshPoiLayer, 1400);
   ['poi-fuel','poi-parking','poi-rest','poi-weigh'].forEach((id) => {
     document.getElementById(id).addEventListener('change', debouncedPoi);
   });
@@ -2879,7 +2892,7 @@
     });
   });
 
-  // Précharge le réseau officiel pour la vue carte (Québec par défaut)
+  // Précharge rapide : no-truck rouges seulement (pas tout le réseau + US)
   (async function preloadNet(){
     try {
       const b = {
@@ -2888,29 +2901,12 @@
         north: map.getBounds().getNorth(),
         east: map.getBounds().getEast()
       };
-      if ((b.north - b.south) > 3 || (b.east - b.west) > 3) return;
-      const net = await TruckNetwork.fetchNetworksForBbox(b);
-      lastOfficialNet = net;
-      renderOfficialTruckNetwork(net);
+      if ((b.north - b.south) > 2 || (b.east - b.west) > 2) return;
+      await loadMapOfficialNetwork();
     } catch (e) { /* ignore */ }
   })();
-  map.on('moveend', debounce(async () => {
-    if (!document.getElementById('net-official')?.checked) return;
-    if (map.getZoom() < 11) return;
-    try {
-      const b = {
-        south: map.getBounds().getSouth(),
-        west: map.getBounds().getWest(),
-        north: map.getBounds().getNorth(),
-        east: map.getBounds().getEast()
-      };
-      if ((b.north - b.south) > 0.6 || (b.east - b.west) > 0.8) return;
-      const net = await TruckNetwork.fetchNetworksForBbox(b);
-      lastOfficialNet = net;
-      renderOfficialTruckNetwork(net);
-    } catch (e) { /* ignore */ }
-  }, 1200));
-
+  map.on('moveend', debounce(() => { loadMapOfficialNetwork(); }, 700));
+  map.on('zoomend', debounce(() => { loadMapOfficialNetwork(); }, 700));
 
   // Onglets style Google / Waze
   function switchTab(name){

@@ -114,9 +114,15 @@
     return res.json();
   }
 
-  /** Québec : segments officiels dans une bbox. */
-  async function fetchQuebecTruckNetwork(bbox, maxFeatures) {
+  /** Québec : segments officiels dans une bbox (payload allégé). */
+  async function fetchQuebecTruckNetwork(bbox, maxFeatures, opts) {
+    var options = opts || {};
     var b = bbox;
+    // Pour les rouges : plus de features + moins de champs (filtre client, MapServer ignore CQL)
+    var limit = maxFeatures || (options.forbiddenOnly ? 1000 : 700);
+    var props = options.forbiddenOnly
+      ? 'geometry,codeclasse,descclasse,gaodoreclg,gamunnom,norte'
+      : 'geometry,codeclasse,descclasse,gaodoreclg,gamunnom,norte';
     var params = new URLSearchParams({
       service: 'WFS',
       version: '1.1.0',
@@ -124,12 +130,13 @@
       typeName: 'ms:aq_camion',
       outputFormat: 'geojson',
       srsName: 'EPSG:4326',
-      maxFeatures: String(maxFeatures || 1500),
-      bbox: bboxString(b)
+      maxFeatures: String(limit),
+      bbox: bboxString(b),
+      propertyName: props
     });
     var data = await fetchJson(QC_WFS + '?' + params.toString());
     var features = (data && data.features) || [];
-    return features.map(function (f) {
+    var mapped = features.map(function (f) {
       var p = f.properties || {};
       var code = String(p.codeclasse != null ? p.codeclasse : '');
       var meta = QC_CLASS[code] || { id: 'unknown', label: p.descclasse || 'Inconnu', role: 'unknown' };
@@ -138,12 +145,16 @@
         code: code,
         role: meta.role,
         label: meta.label,
-        name: p.gaodoreclg || p.norte || p.gaodospeci || '',
-        city: p.gamunnom || p.drmunnom || '',
+        name: p.gaodoreclg || p.norte || '',
+        city: p.gamunnom || '',
         geometry: f.geometry,
         properties: p
       };
     });
+    if (options.forbiddenOnly) {
+      return mapped.filter(function (x) { return x.role === 'forbidden'; });
+    }
+    return mapped;
   }
 
   /** USA : National Network (routes PL fédérales) dans une bbox. */
@@ -151,9 +162,9 @@
     var b = bbox;
     var params = new URLSearchParams({
       where: '1=1',
-      outFields: 'SIGN1,SIGNT1,SIGNN1,LNAME,NN,FCLASS,STFIPS',
+      outFields: 'SIGN1,LNAME,NN,FCLASS',
       f: 'geojson',
-      resultRecordCount: String(maxFeatures || 2000),
+      resultRecordCount: String(maxFeatures || 400),
       geometry: [b.west, b.south, b.east, b.north].join(','),
       geometryType: 'esriGeometryEnvelope',
       inSR: '4326',
@@ -176,7 +187,6 @@
   }
 
   function likelyInQuebec(bbox) {
-    // Rough Quebec envelope
     return bbox.west < -57 && bbox.east > -80 && bbox.south < 63 && bbox.north > 44.5 &&
       bbox.west > -80 && bbox.east < -56;
   }
@@ -189,19 +199,29 @@
     return bbox.south < 33 && bbox.north > 14 && bbox.west < -86 && bbox.east > -118;
   }
 
+  /** Centre clairement au Québec (évite double fetch US inutile). */
+  function centeredInQuebec(bbox) {
+    var lat = (bbox.south + bbox.north) / 2;
+    var lon = (bbox.west + bbox.east) / 2;
+    return lat >= 45.0 && lon <= -71.0 && lon >= -79.5;
+  }
+
   /**
-   * Charge les couches pertinentes pour une bbox (itinéraire / vue carte).
-   * Retourne { allowed, forbidden, caution, all, sourcesUsed }
+   * Charge les couches pertinentes pour une bbox.
+   * options.forbiddenOnly → priorise les no-truck rouges (plus rapide).
+   * options.skipUS → ne charge pas le National Network US.
    */
-  async function fetchNetworksForBbox(bbox) {
+  async function fetchNetworksForBbox(bbox, options) {
+    var opts = options || {};
     var tasks = [];
     var labels = [];
     if (likelyInQuebec(bbox)) {
-      tasks.push(fetchQuebecTruckNetwork(bbox));
+      tasks.push(fetchQuebecTruckNetwork(bbox, opts.maxFeatures || 700, { forbiddenOnly: !!opts.forbiddenOnly }));
       labels.push('CA-QC');
     }
-    if (likelyInUSA(bbox)) {
-      tasks.push(fetchUSNationalNetwork(bbox));
+    // US seulement si pas clairement centré au QC, ou si bbox chevauche vraiment le sud
+    if (likelyInUSA(bbox) && !opts.skipUS && !centeredInQuebec(bbox) && !opts.forbiddenOnly) {
+      tasks.push(fetchUSNationalNetwork(bbox, 300));
       labels.push('US');
     }
     var settled = await Promise.allSettled(tasks);
@@ -374,6 +394,7 @@
     likelyInQuebec: likelyInQuebec,
     likelyInUSA: likelyInUSA,
     likelyInMexico: likelyInMexico,
+    centeredInQuebec: centeredInQuebec,
     guessCountry: guessCountry,
     tripCrossesIntoCountry: tripCrossesIntoCountry,
     pointCountriesSame: pointCountriesSame
