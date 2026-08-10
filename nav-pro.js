@@ -131,7 +131,7 @@
   var DEFAULT_ROUTE_OPTIONS = {
     avoidTolls: false,
     avoidFerries: false,
-    avoidBorders: false,
+    avoidBorders: true,
     useTraffic: true
   };
 
@@ -140,7 +140,7 @@
     return {
       avoidTolls: !!(stored && stored.avoidTolls),
       avoidFerries: !!(stored && stored.avoidFerries),
-      avoidBorders: !!(stored && stored.avoidBorders),
+      avoidBorders: stored && 'avoidBorders' in stored ? !!stored.avoidBorders : true,
       useTraffic: stored && typeof stored.useTraffic === 'boolean' ? stored.useTraffic : DEFAULT_ROUTE_OPTIONS.useTraffic
     };
   }

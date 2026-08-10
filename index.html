@@ -828,7 +828,7 @@
       <div class="check-list">
         <label><input type="checkbox" id="opt-tolls"> Péages</label>
         <label><input type="checkbox" id="opt-ferries"> Traversiers / ferries</label>
-        <label><input type="checkbox" id="opt-borders"> Frontières</label>
+        <label><input type="checkbox" id="opt-borders" checked> Sans frontière (pas de passeport)</label>
         <label><input type="checkbox" id="opt-traffic" checked> ETA avec trafic estimé</label>
       </div>
     </div>
@@ -1511,31 +1511,31 @@
     return allCoords;
   }
 
-  // Score camion : favorise voies PL / autoroutes, pénalise rues locales / rangs
+  // Score : priorité au plus rapide, puis rester au pays, puis éviter no-truck / rues locales
   function scoreTruckFriendliness(trip){
     let score = 0;
+    const time = trip.summary && trip.summary.time != null ? trip.summary.time : 0;
+    const length = trip.summary && trip.summary.length != null ? trip.summary.length : 0;
+    // Plus rapide = mieux (secondes)
+    score -= time * 2;
+    // Léger biais distance
+    score -= length * 0.8;
     (trip.legs || []).forEach((leg) => {
       (leg.maneuvers || []).forEach((m) => {
         const len = m.length || 0;
         const names = (m.street_names || []).map(n => String(n).toLowerCase());
         const joined = names.join(' ');
 
-        if (m.highway) score += len * 14;
-        if (names.some(n => /^(a-?)?\d{1,3}(\s|$)/i.test(n) || /^(i|us|hwy|route|rt)\s*-?\s*\d+/i.test(n))) {
-          score += len * 10;
-        }
-        if (/autoroute|freeway|interstate|expressway|highway|boulevard|parkway/.test(joined)) score += len * 8;
-        if (/truck\s*route|voie\s*camion|hgv/.test(joined)) score += len * 16;
+        if (m.highway) score += len * 2;
+        if (/autoroute|freeway|expressway|highway|parkway/.test(joined)) score += len * 1.5;
+        if (/truck\s*route|voie\s*camion|hgv/.test(joined)) score += len * 3;
 
-        if (/^rang\b|\brang\b/.test(joined)) score -= len * 30;
+        if (/^rang\b|\brang\b/.test(joined)) score -= len * 8;
         if (/\brue\b|\bavenue\b|\bruelle\b|\bcrescent\b|\bcourt\b|\bplace\b/.test(joined) && !m.highway) {
-          score -= len * 12;
+          score -= len * 3;
         }
-        if (/\brésidentiel|residential|quartier/.test(joined)) score -= len * 20;
       });
     });
-    score -= (trip.summary.time || 0) * 0.001;
-    score -= (trip.summary.length || 0) * 0.5;
     return score;
   }
 
@@ -1553,7 +1553,7 @@
     return localKm;
   }
 
-  function buildRouteLocations(){
+  function buildRouteLocations(viaLatLngs){
     const origin = currentOrigin();
     const locs = [{ lat: origin[0], lon: origin[1], type: 'break' }];
     waypoints.forEach((wp) => {
@@ -1561,25 +1561,31 @@
         locs.push({ lat: wp.lat, lon: wp.lon, type: 'break' });
       }
     });
+    (viaLatLngs || []).forEach((v) => {
+      if (v && isFinite(v[0]) && isFinite(v[1])) {
+        locs.push({ lat: v[0], lon: v[1], type: 'through' });
+      }
+    });
     locs.push({ lat: destLatLng[0], lon: destLatLng[1], type: 'break' });
     return locs;
   }
 
-  function applyAvoidOptions(optsKey, opts){
+  function applyAvoidOptions(optsKey, opts, forceAvoidBorders){
     const routeOpts = NavPro.getRouteOptions();
     const block = opts[optsKey];
     if (!block) return opts;
     block.use_tolls = routeOpts.avoidTolls ? 0 : 0.8;
     block.use_ferry = routeOpts.avoidFerries ? 0 : 0.5;
     // Valhalla truck ignore souvent ce pénalité → on filtre aussi côté app
-    block.country_crossing_penalty = routeOpts.avoidBorders ? 60000 : 0;
-    block.country_crossing_cost = routeOpts.avoidBorders ? 60000 : 0;
+    const avoid = !!(forceAvoidBorders || routeOpts.avoidBorders);
+    block.country_crossing_penalty = avoid ? 60000 : 0;
+    block.country_crossing_cost = avoid ? 60000 : 0;
     return opts;
   }
 
-  async function fetchValhallaTrip(costing, costingOptions, excludePolygons){
+  async function fetchValhallaTrip(costing, costingOptions, excludePolygons, viaLatLngs){
     const body = {
-      locations: buildRouteLocations(),
+      locations: buildRouteLocations(viaLatLngs),
       costing,
       costing_options: costingOptions,
       directions_options: { units: 'kilometers', language: 'fr-FR' }
@@ -1773,7 +1779,8 @@
     routeCalcBtn.textContent = 'Calcul camion…';
     routeNote.textContent = 'Chargement du réseau camion officiel (CA/US) + calcul PL…';
 
-    // Profil PL strict : ne jamais préférer « auto » (ignore hgv=no / rues interdites).
+    // Profils camion : « fast » = plus rapide (autorise routes nationales CA) ;
+    // « strict » = plus PL / truck routes (peut détourner via USA — on le pénalise côté score).
     const truckBase = {
       height: TRUCK.height,
       width: TRUCK.width,
@@ -1789,20 +1796,18 @@
       use_ferry: 0,
       country_crossing_penalty: 0,
       hgv_no_access_penalty: 43200,
+      use_truck_route: 0.55,
+      low_class_factor: 2.8,
+      low_class_penalty: 90,
+      service_factor: 2.2,
+      service_penalty: 60
+    };
+    const truckStrictBase = Object.assign({}, truckBase, {
       use_truck_route: 1,
       low_class_factor: 5,
       low_class_penalty: 220,
       service_factor: 5,
       service_penalty: 150
-    };
-    const truckOpts = applyAvoidOptions('truck', { truck: Object.assign({}, truckBase) });
-    const truckHwyOpts = applyAvoidOptions('truck', {
-      truck: Object.assign({}, truckBase, {
-        use_highways: 1,
-        low_class_factor: 8,
-        low_class_penalty: 400,
-        use_truck_route: 1
-      })
     });
 
     try {
@@ -1813,140 +1818,249 @@
       const sameCountry = typeof TruckNetwork.pointCountriesSame === 'function'
         ? TruckNetwork.pointCountriesSame(origin, destLatLng)
         : false;
+      // Même pays (ex. Granby→Ottawa) : rester domestique même sans case « Frontières »
       const stayDomestic = !!(routeOpts.avoidBorders || sameCountry);
       const longHaul = haversine(origin[0], origin[1], destLatLng[0], destLatLng[1]) > 120000;
+      const forceBorders = stayDomestic;
+
+      const truckFastOpts = applyAvoidOptions('truck', { truck: Object.assign({}, truckBase) }, forceBorders);
+      const truckStrictOpts = applyAvoidOptions('truck', { truck: Object.assign({}, truckStrictBase) }, forceBorders);
+      const truckHwyOpts = applyAvoidOptions('truck', {
+        truck: Object.assign({}, truckBase, {
+          use_highways: 1,
+          use_truck_route: 0.45,
+          low_class_factor: 3.5,
+          low_class_penalty: 120
+        })
+      }, forceBorders);
 
       function crossesUS(trip){
         return typeof TruckNetwork.tripCrossesIntoCountry === 'function'
           && TruckNetwork.tripCrossesIntoCountry(trip, 'US');
       }
+      function crossesMX(trip){
+        return typeof TruckNetwork.tripCrossesIntoCountry === 'function'
+          && TruckNetwork.tripCrossesIntoCountry(trip, 'MX');
+      }
+      function crossesForeign(trip){
+        if (!stayDomestic || !trip) return false;
+        const originCountry = typeof TruckNetwork.guessCountry === 'function'
+          ? TruckNetwork.guessCountry(origin[0], origin[1])
+          : 'other';
+        if (typeof TruckNetwork.routeLeavesCountry === 'function') {
+          try {
+            const coords = tripCoords(trip);
+            if (TruckNetwork.routeLeavesCountry(coords, originCountry)) return true;
+          } catch (e) { /* ignore */ }
+        }
+        if (originCountry === 'CA') return crossesUS(trip) || crossesMX(trip);
+        if (originCountry === 'MX') return crossesUS(trip);
+        if (originCountry === 'US') return crossesMX(trip);
+        return crossesUS(trip);
+      }
 
       function scoreTripCandidate(trip, usedExcludes) {
         let score = scoreTruckFriendliness(trip);
-        if (stayDomestic && crossesUS(trip)) score -= 1e9;
-        if (routeOpts.avoidBorders && crossesUS(trip)) score -= 1e9;
-        if (stayDomestic && !crossesUS(trip)) score -= (trip.summary.length || 0) * 2;
-        if (usedExcludes) score += 30;
+        if (stayDomestic && crossesForeign(trip)) score -= 1e9;
+        if (routeOpts.avoidBorders && crossesForeign(trip)) score -= 1e9;
+        // Bonus léger si on a évité des no-truck SANS allonger trop
+        if (usedExcludes) score += 40;
         return score;
       }
 
-      async function gatherTruckTrips(excludes) {
-        // 1 requête principale + 1 secours max (évite 3 Valhalla en parallèle)
-        const mildOpts = applyAvoidOptions('truck', {
-          truck: Object.assign({}, truckBase, {
-            use_truck_route: stayDomestic ? 0.4 : 1,
-            low_class_factor: stayDomestic && longHaul ? 2.5 : truckBase.low_class_factor,
-            low_class_penalty: stayDomestic && longHaul ? 80 : truckBase.low_class_penalty,
-            service_factor: stayDomestic && longHaul ? 2 : truckBase.service_factor
-          })
-        });
+      async function gatherTruckTrips(excludes, viaLatLngs) {
+        // Toujours tester plusieurs profils → garder le plus rapide admissible
+        const results = await Promise.allSettled([
+          fetchValhallaTrip('truck', truckFastOpts, excludes, viaLatLngs),
+          fetchValhallaTrip('truck', truckHwyOpts, excludes, viaLatLngs),
+          fetchValhallaTrip('truck', truckStrictOpts, excludes, viaLatLngs)
+        ]);
         const scored = [];
-        try {
-          const trip = await fetchValhallaTrip('truck', truckOpts, excludes);
-          scored.push({ trip, usedExcludes: !!(excludes && excludes.length), score: scoreTripCandidate(trip, !!(excludes && excludes.length)) });
-        } catch (e) {
-          try {
-            const trip = await fetchValhallaTrip('truck', truckHwyOpts, excludes);
-            scored.push({ trip, usedExcludes: !!(excludes && excludes.length), score: scoreTripCandidate(trip, !!(excludes && excludes.length)) });
-          } catch (e2) {
-            const trip = await fetchValhallaTrip('truck', mildOpts, null);
-            scored.push({ trip, usedExcludes: false, score: scoreTripCandidate(trip, false) });
-          }
-        }
-        // Variante autoroutière en parallèle seulement si long trajet (meilleure chance Canada)
-        if (longHaul || stayDomestic) {
-          try {
-            const hwy = await fetchValhallaTrip('truck', truckHwyOpts, excludes);
-            scored.push({ trip: hwy, usedExcludes: !!(excludes && excludes.length), score: scoreTripCandidate(hwy, !!(excludes && excludes.length)) });
-          } catch (e) { /* ignore */ }
-        }
-        if (!scored.length) throw new Error('itinéraire impossible');
+        results.forEach((r) => {
+          if (r.status !== 'fulfilled' || !r.value) return;
+          scored.push({
+            trip: r.value,
+            usedExcludes: !!(excludes && excludes.length),
+            score: scoreTripCandidate(r.value, !!(excludes && excludes.length)),
+            via: !!(viaLatLngs && viaLatLngs.length)
+          });
+        });
         scored.sort((a, b) => b.score - a.score);
         return scored;
       }
 
+      function pickBest(ranked) {
+        if (!ranked || !ranked.length) return null;
+        if (!stayDomestic) return ranked[0];
+        const domestic = ranked.filter((c) => !crossesForeign(c.trip));
+        // Même pays : JAMAIS accepter un détour frontière (Albany, etc.)
+        return domestic.length ? domestic[0] : null;
+      }
+
+      async function ensureDomesticRoute(excludes) {
+        let ranked = await gatherTruckTrips(excludes);
+        let best = pickBest(ranked);
+        if (best) return { best, ranked, netInfoExtra: '' };
+
+        // 1) Forcer corridor domestique via points (ex. QC→Toronto via 401 CA)
+        if (stayDomestic && typeof TruckNetwork.domesticViaCandidates === 'function') {
+          const vias = TruckNetwork.domesticViaCandidates(origin, destLatLng);
+          routeNote.textContent = 'Recalcul sans frontière (corridor au pays)…';
+          for (let i = 0; i < vias.length; i++) {
+            const viaSet = vias.slice(0, i + 1);
+            try {
+              ranked = await gatherTruckTrips(excludes, viaSet);
+              best = pickBest(ranked);
+              if (best) return { best, ranked, netInfoExtra: 'via corridor domestique' };
+            } catch (e) { /* try next */ }
+          }
+          // Essayer chaque via seule (parfois mieux qu'un chainage)
+          for (let i = 0; i < vias.length; i++) {
+            try {
+              ranked = await gatherTruckTrips(excludes, [vias[i]]);
+              best = pickBest(ranked);
+              if (best) return { best, ranked, netInfoExtra: 'via domestique' };
+            } catch (e) { /* try next */ }
+          }
+        }
+
+        // 2) Secours auto (réseau routier) — uniquement si reste au pays
+        if (stayDomestic) {
+          routeNote.textContent = 'Secours réseau routier sans frontière…';
+          try {
+            const autoTrip = await fetchValhallaTrip('auto', applyAvoidOptions('auto', { auto: {} }, true), excludes);
+            if (autoTrip && !crossesForeign(autoTrip)) {
+              return {
+                best: { trip: autoTrip, usedExcludes: !!(excludes && excludes.length), score: scoreTripCandidate(autoTrip, false) },
+                ranked: [],
+                netInfoExtra: 'réseau routier · sans frontière'
+              };
+            }
+          } catch (e) { /* ignore */ }
+          // auto + vias
+          if (typeof TruckNetwork.domesticViaCandidates === 'function') {
+            const vias = TruckNetwork.domesticViaCandidates(origin, destLatLng);
+            for (let i = 0; i < Math.min(vias.length, 3); i++) {
+              try {
+                const autoTrip = await fetchValhallaTrip('auto', applyAvoidOptions('auto', { auto: {} }, true), excludes, [vias[i]]);
+                if (autoTrip && !crossesForeign(autoTrip)) {
+                  return {
+                    best: { trip: autoTrip, usedExcludes: false, score: scoreTripCandidate(autoTrip, false) },
+                    ranked: [],
+                    netInfoExtra: 'réseau routier · via domestique'
+                  };
+                }
+              } catch (e) { /* ignore */ }
+            }
+          }
+        }
+
+        // 3) Dernier recours : meilleur truck même étranger SEULEMENT si trajet international demandé
+        if (!stayDomestic && ranked.length) return { best: ranked[0], ranked, netInfoExtra: '' };
+        throw new Error('aucun itinéraire sans frontière trouvé (vérifie départ/destination)');
+      }
+
       // 1) Calcul d'itinéraire immédiatement (ne pas attendre le WFS)
-      routeNote.textContent = 'Calcul de l\'itinéraire camion…';
+      routeNote.textContent = 'Calcul du chemin le plus rapide sans frontière…';
       const netPromise = loadOfficialTruckNetworkForRoute().catch((e) => {
         return { forbidden: [], allowed: [], caution: [], all: [], sourcesUsed: [], _error: e.message || String(e) };
       });
 
-      let ranked = await gatherTruckTrips(null);
-      let best = ranked[0];
+      let ensured = await ensureDomesticRoute(null);
+      let best = ensured.best;
+      let ranked = ensured.ranked;
       let excludePolygons = [];
-      let netInfo = '';
+      let netInfo = ensured.netInfoExtra || '';
 
-      // 2) Réseau officiel en parallèle — timeout déjà dans load*
+      // 2) Réseau officiel en parallèle
       const net = await netPromise;
-      if (net && net._error) netInfo = 'réseau officiel: ' + net._error;
-      else if (net && net.sourcesUsed && net.sourcesUsed.length) netInfo = 'réseau ' + net.sourcesUsed.join('+');
-
-      // 3) Anti-détour USA
-      if (stayDomestic && crossesUS(best.trip)) {
-        routeNote.textContent = 'Détour USA détecté — recalcul Canada…';
-        const domestic = ranked.filter((c) => !crossesUS(c.trip));
-        if (domestic.length) {
-          best = domestic[0];
-          netInfo = 'reste au Canada';
-        } else {
-          const retry = await gatherTruckTrips(null);
-          best = retry.find((c) => !crossesUS(c.trip)) || retry[0];
-          netInfo = crossesUS(best.trip) ? 'passage frontière encore proposé' : 'itinéraire canadien';
-        }
+      if (net && net._error) netInfo = (netInfo ? netInfo + ' · ' : '') + 'réseau officiel: ' + net._error;
+      else if (net && net.sourcesUsed && net.sourcesUsed.length) {
+        netInfo = (netInfo ? netInfo + ' · ' : '') + 'réseau ' + net.sourcesUsed.join('+');
       }
 
-      // 4) Ajustement no-truck local : évite les rues interdites sauf sortie départ / entrée destination
+      // 3) Filet anti-frontière
+      if (stayDomestic && best && crossesForeign(best.trip)) {
+        routeNote.textContent = 'Détour frontière refusé — nouveau calcul au pays…';
+        ensured = await ensureDomesticRoute(null);
+        best = ensured.best;
+        ranked = ensured.ranked;
+        netInfo = ensured.netInfoExtra || 'reste au pays';
+      }
+
+      // 4) Évitement no-truck : toujours, sans frontière ni gros détour
       const useExclude = document.getElementById('net-exclude');
-      if (!longHaul && net && net.forbidden && net.forbidden.length &&
-          (!useExclude || useExclude.checked) && !crossesUS(best.trip)) {
+      if (net && net.forbidden && net.forbidden.length &&
+          (!useExclude || useExclude.checked) && best && !crossesForeign(best.trip)) {
         try {
           const softPts = [origin, destLatLng].filter(Boolean);
           let polys = [];
+          const baseTime = best.trip.summary.time || 0;
           const baseKm = best.trip.summary.length || 0;
           const industrialPolygons = net.industrialPolygons || [];
-          for (let round = 0; round < 3; round++) {
+          const maxRounds = longHaul ? 1 : 3;
+          for (let round = 0; round < maxRounds; round++) {
             const draftCoords = tripCoords(best.trip);
+            let targetForbidden = net.forbidden;
+            if (longHaul) {
+              targetForbidden = net.forbidden.filter((f) => {
+                const g = f.geometry;
+                if (!g) return false;
+                const parts = g.type === 'MultiLineString' ? g.coordinates
+                  : g.type === 'LineString' ? [g.coordinates] : null;
+                if (!parts || !parts.length) return false;
+                const line = parts[0];
+                const mid = line[Math.floor(line.length / 2)];
+                if (!mid) return false;
+                const lat = mid[1];
+                const lon = mid[0];
+                return softPts.some((p) => haversine(p[0], p[1], lat, lon) < 2500);
+              });
+            }
             const followed = typeof TruckNetwork.findFollowedForbidden === 'function'
-              ? TruckNetwork.findFollowedForbidden(net.forbidden, draftCoords, {
-                  softM: 200,
+              ? TruckNetwork.findFollowedForbidden(targetForbidden, draftCoords, {
+                  softM: longHaul ? 350 : 200,
                   ignoreNearPoints: softPts,
-                  minHits: 3,
+                  minHits: longHaul ? 4 : 3,
                   industrialPolygons: industrialPolygons
                 })
               : [];
             if (!followed.length) break;
             routeNote.textContent = 'Évitement no-truck (passe ' + (round + 1) + ')…';
             const before = polys.length;
-            polys = TruckNetwork.buildExcludePolygons(net.forbidden, 50, draftCoords, false, {
+            polys = TruckNetwork.buildExcludePolygons(targetForbidden, longHaul ? 20 : 50, draftCoords, false, {
               densify: true,
-              softM: 200,
+              softM: longHaul ? 350 : 200,
               ignoreNearPoints: softPts,
               existing: polys,
-              halfDeg: 0.00125,
+              halfDeg: longHaul ? 0.0010 : 0.00125,
               industrialPolygons: industrialPolygons
             });
             if (polys.length === before) break;
-            const improved = await gatherTruckTrips(polys);
-            const ok = improved.find((c) => !stayDomestic || !crossesUS(c.trip));
-            if (!ok) break;
+            const improvedEnsured = await ensureDomesticRoute(polys);
+            const ok = improvedEnsured.best;
+            if (!ok || crossesForeign(ok.trip)) break;
+            const newTime = ok.trip.summary.time || 0;
             const newKm = ok.trip.summary.length || 0;
-            // Accepter un détour raisonnable pour rester hors no-truck
-            if (newKm > Math.max(baseKm * 2.2, baseKm + 8)) break;
+            if (newTime > baseTime * 1.25 || newKm > baseKm * 1.2) break;
             best = ok;
             excludePolygons = polys;
-            netInfo = polys.length + ' exclusions no-truck · hors zones départ/arrivée';
+            netInfo = polys.length + ' no-truck évités · plus rapide possible';
           }
         } catch (e) { /* ignore adjustments */ }
       }
 
       let trip = best && best.trip;
       if (!trip) throw new Error('aucun itinéraire disponible');
+      if (stayDomestic && crossesForeign(trip)) {
+        throw new Error('itinéraire frontalier refusé (sans passeport / même pays)');
+      }
 
-      let modeNote = crossesUS(trip)
-        ? 'passage USA'
-        : (excludePolygons.length ? 'camion · no-truck locaux évités' : 'profil camion');
-      if (routeOpts.avoidBorders) modeNote += ' · frontières évitées';
-      if (stayDomestic && !crossesUS(trip)) modeNote += ' · reste au pays';
+      let modeNote = crossesForeign(trip)
+        ? 'passage frontière'
+        : (excludePolygons.length ? 'plus rapide · no-truck évités · sans frontière' : 'plus rapide · sans frontière');
+      if (routeOpts.avoidBorders || sameCountry) modeNote += ' · pas de passeport requis';
+      if (stayDomestic && !crossesForeign(trip)) modeNote += ' · reste au pays';
       const localKm = summarizeLocalStreetKm(trip);
       if (localKm > 1.5) modeNote += ' · ~' + localKm.toFixed(1) + ' km rues locales';
       if (netInfo) modeNote += ' · ' + netInfo;
