@@ -644,28 +644,36 @@
   /** Estimation grossière du pays d'un point (CA / US / MX / other). */
   function guessCountry(lat, lon) {
     if (!isFinite(lat) || !isFinite(lon)) return 'other';
-    // Mexique
+    // Mexique (contiguous)
     if (lat < 32.6 && lat > 14.5 && lon < -86.5 && lon > -117.5) return 'MX';
     // Alaska
     if (lat > 51 && lon < -130) return 'US';
-    // Frontière CA/US approximative (sud du Canada)
-    if (lat >= 41 && lat <= 49.5 && lon <= -67 && lon >= -125) {
-      // Sous ~45.0 entre Ontario/Québec/Maritimes → souvent US (NY/VT/NH/ME)
-      if (lat < 45.0 && lon > -76.5 && lon < -66.8) return 'US';
-      if (lat < 44.5 && lon <= -76.5 && lon > -83) return 'US';
-      // Contiguous US below 49th except already handled
+
+    // --- Canada atlantique / Québec / Ontario / Prairies / côte ---
+    // Sud de l'Ontario (Toronto, Hamilton, Niagara CA, Windsor) : lat < 45 mais CANADA
+    // Règle : au nord du lac Ontario / Érié côté canadien.
+    if (lat >= 41.65 && lat < 45.05 && lon <= -74.5 && lon >= -83.6) {
+      // Pocket US : rive sud du lac Ontario (Rochester / Syracuse) ~ lat < 43.35, lon -79.2..-76.0
+      if (lat < 43.35 && lon > -79.25 && lon < -76.0) return 'US';
+      // Pocket US : Buffalo / Niagara US ~ lat < 43.2, lon -79.2..-78.7
+      if (lat < 43.15 && lon >= -79.3 && lon <= -78.7) return 'US';
+      // Michigan inférieur (Détroit) — laisser Windsor (CA) à l'est de la rivière
+      if (lat < 42.6 && lon > -83.6 && lon < -83.12) return 'US';
+      return 'CA';
+    }
+
+    // New England / NY est du 76.5°O sous le 45e
+    if (lat < 45.0 && lon > -76.5 && lon < -66.8) return 'US';
+
+    // Frontière CA/US approximative
+    if (lat >= 41 && lat <= 49.5 && lon <= -66 && lon >= -125) {
       if (lat < 49.0 && lon < -95) {
-        // prairie border ~49
         if (lat < 48.95) return 'US';
       }
-      if (lat < 49.0 && lon >= -95 && lon <= -66) {
-        // east of prairies: Canada if north of ~45 east of Detroit-ish, with exceptions
-        if (lon > -82 && lat >= 41.7 && lat < 43.5) return 'US'; // lower MI/NY etc rough
-        if (lat >= 45.0) return 'CA';
-        if (lat >= 42.9 && lon < -78.5 && lon > -83.5) return 'CA'; // tip of Ontario
-        if (lat < 45.0) return 'US';
-      }
-      return lat >= 45.0 ? 'CA' : 'US';
+      if (lat >= 45.0) return 'CA';
+      if (lat >= 42.9 && lon <= -78.5 && lon >= -83.5) return 'CA';
+      if (lat < 45.0) return 'US';
+      return 'CA';
     }
     if (lat > 49 && lon < -52 && lon > -141) return 'CA';
     if (lat > 24 && lat < 49.5 && lon < -66 && lon > -125) return 'US';
@@ -677,7 +685,7 @@
     (trip.legs || []).forEach(function (leg) {
       (leg.maneuvers || []).forEach(function (m) {
         var names = ((m.street_names || []).join(' '));
-        if (countryCode === 'US' && /\b(NY |VT |NH |ME |PA |US |I-|Interstate|State Route|New York|Vermont|New Hampshire|Maine)\b/i.test(names)) hit = true;
+        if (countryCode === 'US' && /\b(NY |VT |NH |ME |PA |US |I-|Interstate|State Route|New York|Vermont|New Hampshire|Maine|Albany|Buffalo|Watertown)\b/i.test(names)) hit = true;
         if (countryCode === 'MX' && /\b(México|Mexico|MEX-)\b/i.test(names)) hit = true;
         if (countryCode === 'CA' && /\b(QC |ON |Autoroute|Trans-Canada|Highway 401|A-15|A-20)\b/i.test(names)) hit = true;
       });
@@ -689,12 +697,49 @@
   function routeLeavesCountry(routeCoords, homeCountry) {
     if (!routeCoords || !routeCoords.length || !homeCountry || homeCountry === 'other') return false;
     var foreign = 0;
-    var step = Math.max(1, Math.floor(routeCoords.length / 50));
+    var total = 0;
+    var step = Math.max(1, Math.floor(routeCoords.length / 60));
     for (var i = 0; i < routeCoords.length; i += step) {
+      total += 1;
       var c = guessCountry(routeCoords[i][0], routeCoords[i][1]);
       if (c !== 'other' && c !== homeCountry) foreign += 1;
     }
-    return foreign >= 3;
+    // Seuil bas : même un court passage frontière (Albany) doit être détecté
+    return foreign >= 2 || (total > 0 && foreign / total >= 0.08);
+  }
+
+  /** Points de passage domestiques pour forcer un corridor au pays (ex. QC→ON via 401). */
+  function domesticViaCandidates(origin, dest) {
+    if (!origin || !dest) return [];
+    var oc = guessCountry(origin[0], origin[1]);
+    var dc = guessCountry(dest[0], dest[1]);
+    if (oc === 'other' || oc !== dc) return [];
+    var vias = [];
+    if (oc === 'CA') {
+      // Corridor Est : Montréal → Cornwall → Kingston → Belleville → Oshawa
+      var corridor = [
+        [45.50, -73.57],
+        [45.02, -74.73],
+        [44.31, -76.55],
+        [44.17, -77.38],
+        [43.89, -78.86]
+      ];
+      corridor.forEach(function (p) {
+        // garder les vias grosso modo entre lon origine/destination
+        var minLon = Math.min(origin[1], dest[1]) - 0.3;
+        var maxLon = Math.max(origin[1], dest[1]) + 0.3;
+        var minLat = Math.min(origin[0], dest[0]) - 1.2;
+        var maxLat = Math.max(origin[0], dest[0]) + 1.2;
+        if (p[1] >= minLon && p[1] <= maxLon && p[0] >= minLat && p[0] <= maxLat) {
+          // pas trop près des extrémités
+          if (haversineM(origin[0], origin[1], p[0], p[1]) > 40000 &&
+              haversineM(dest[0], dest[1], p[0], p[1]) > 40000) {
+            vias.push(p);
+          }
+        }
+      });
+    }
+    return vias;
   }
 
   function pointCountriesSame(a, b) {
@@ -731,6 +776,7 @@
     guessCountry: guessCountry,
     tripCrossesIntoCountry: tripCrossesIntoCountry,
     routeLeavesCountry: routeLeavesCountry,
+    domesticViaCandidates: domesticViaCandidates,
     pointCountriesSame: pointCountriesSame
   };
 })(typeof window !== 'undefined' ? window : this);
