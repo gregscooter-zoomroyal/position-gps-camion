@@ -124,7 +124,7 @@
       typeName: 'ms:aq_camion',
       outputFormat: 'geojson',
       srsName: 'EPSG:4326',
-      maxFeatures: String(maxFeatures || 4000),
+      maxFeatures: String(maxFeatures || 1500),
       bbox: bboxString(b)
     });
     var data = await fetchJson(QC_WFS + '?' + params.toString());

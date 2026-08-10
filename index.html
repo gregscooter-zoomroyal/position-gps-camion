@@ -2896,7 +2896,7 @@
   })();
   map.on('moveend', debounce(async () => {
     if (!document.getElementById('net-official')?.checked) return;
-    if (map.getZoom() < 10) return;
+    if (map.getZoom() < 11) return;
     try {
       const b = {
         south: map.getBounds().getSouth(),
@@ -2904,11 +2904,12 @@
         north: map.getBounds().getNorth(),
         east: map.getBounds().getEast()
       };
+      if ((b.north - b.south) > 0.6 || (b.east - b.west) > 0.8) return;
       const net = await TruckNetwork.fetchNetworksForBbox(b);
       lastOfficialNet = net;
       renderOfficialTruckNetwork(net);
     } catch (e) { /* ignore */ }
-  }, 900));
+  }, 1200));
 
 
   // Onglets style Google / Waze
