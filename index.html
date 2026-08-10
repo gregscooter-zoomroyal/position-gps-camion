@@ -836,11 +836,11 @@
     <div class="tab-panel" data-panel="zones">
       <div class="panel-title">Zones sur la carte</div>
       <div class="truck-legend">
-        <div><span class="swatch" style="background:rgba(255,255,255,0.55);"></span>Routes navigables camion</div>
-        <div><span class="swatch" style="background:#FF3B3B;"></span>Quartiers / interdites</div>
+        <div><span class="swatch" style="background:#4ADE80;"></span>Industriel / navigable camion</div>
+        <div><span class="swatch" style="background:#FF3B3B;"></span>Quartiers résidentiels / interdites</div>
         <div><span class="swatch dot" style="background:#FFB238;"></span>Pont bas (selon profil)</div>
       </div>
-      <div class="truck-note" id="truck-note">Zoome au niveau rue pour voir les zones camion et les ponts bas (données OpenStreetMap).</div>
+      <div class="truck-note" id="truck-note">Les quartiers industriels (CA/US/MX) sont permis aux camions (vert). Zoome pour les ponts bas.</div>
 
       <div class="panel-title">Réseau camion officiel (CA / US / MX)</div>
       <div class="check-list">
@@ -848,11 +848,11 @@
         <label><input type="checkbox" id="net-exclude" checked> Éviter no-truck officiels à l'itinéraire</label>
       </div>
       <div class="truck-legend">
-        <div><span class="swatch" style="background:#4ADE80;"></span>Transit / National Network</div>
+        <div><span class="swatch" style="background:#4ADE80;"></span>Transit / National Network / Industriel</div>
         <div><span class="swatch" style="background:#FFB238;"></span>Restreint / partiel</div>
         <div><span class="swatch" style="background:#FF3B3B;"></span>Interdit (no truck)</div>
       </div>
-      <div class="truck-note" id="net-note">Données MTQ Québec + USDOT National Network. MX : INEGI RNC (lien dans Pro).</div>
+      <div class="truck-note" id="net-note">MTQ + USDOT + quartiers industriels OSM (CA/US/MX) en vert. MX officiel : lien Pro.</div>
 
       <div class="panel-title">Points d'intérêt camion</div>
       <div class="check-list">
@@ -1667,14 +1667,17 @@
     officialNetLayer = L.layerGroup().addTo(map);
     const zoom = map.getZoom();
     const redOnly = !!drawOpts.redOnly || (net.forbidden.length && !net.allowed.length && !net.caution.length);
-    // Priorité rouge : budget plus large pour les no-truck
-    const maxDraw = zoom >= 12 ? 700 : zoom >= 10 ? 350 : 120;
-    const redBudget = redOnly ? maxDraw : Math.floor(maxDraw * 0.75);
-    const otherBudget = redOnly ? 0 : Math.floor(maxDraw * 0.25);
+    // Priorité rouge, puis vert (transit + industriel)
+    const maxDraw = zoom >= 12 ? 800 : zoom >= 10 ? 400 : 140;
+    const redBudget = redOnly ? maxDraw : Math.floor(maxDraw * 0.45);
+    const otherBudget = redOnly ? 0 : Math.floor(maxDraw * 0.55);
+    const industrial = (net.allowed || []).filter((s) => s.code === 'IND' || (s.source && String(s.source).indexOf('INDUSTRIAL') !== -1));
+    const otherAllowed = (net.allowed || []).filter((s) => industrial.indexOf(s) === -1);
     const drawList = []
       .concat(net.forbidden.slice(0, redBudget))
-      .concat(redOnly ? [] : net.caution.slice(0, Math.floor(otherBudget * 0.4)))
-      .concat(redOnly ? [] : net.allowed.slice(0, Math.floor(otherBudget * 0.6)));
+      .concat(redOnly ? [] : industrial.slice(0, Math.floor(otherBudget * 0.55)))
+      .concat(redOnly ? [] : otherAllowed.slice(0, Math.floor(otherBudget * 0.3)))
+      .concat(redOnly ? [] : net.caution.slice(0, Math.floor(otherBudget * 0.15)));
     const step = zoom < 11 ? 4 : zoom < 13 ? 2 : 1;
     drawList.forEach((seg) => {
       const g = seg.geometry;
@@ -1708,8 +1711,9 @@
       note.textContent = (net.sourcesUsed.join(' + ') || 'aucune source') +
         (redOnly ? ' · rouges prioritaires' : '') +
         ' · ' + net.forbidden.length + ' no-truck' +
+        (industrial.length ? ' · ' + industrial.length + ' industriel' : '') +
         (net.caution.length ? ' · ' + net.caution.length + ' restreint' : '') +
-        (net.allowed.length ? ' · ' + net.allowed.length + ' transit' : '');
+        (otherAllowed.length ? ' · ' + otherAllowed.length + ' transit' : '');
     }
   }
 
@@ -1899,13 +1903,15 @@
           const softPts = [origin, destLatLng].filter(Boolean);
           let polys = [];
           const baseKm = best.trip.summary.length || 0;
+          const industrialPolygons = net.industrialPolygons || [];
           for (let round = 0; round < 3; round++) {
             const draftCoords = tripCoords(best.trip);
             const followed = typeof TruckNetwork.findFollowedForbidden === 'function'
               ? TruckNetwork.findFollowedForbidden(net.forbidden, draftCoords, {
                   softM: 200,
                   ignoreNearPoints: softPts,
-                  minHits: 3
+                  minHits: 3,
+                  industrialPolygons: industrialPolygons
                 })
               : [];
             if (!followed.length) break;
@@ -1916,7 +1922,8 @@
               softM: 200,
               ignoreNearPoints: softPts,
               existing: polys,
-              halfDeg: 0.00125
+              halfDeg: 0.00125,
+              industrialPolygons: industrialPolygons
             });
             if (polys.length === before) break;
             const improved = await gatherTruckTrips(polys);
