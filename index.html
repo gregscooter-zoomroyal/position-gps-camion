@@ -949,8 +949,8 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
-<script src="./nav-pro.js?v=12"></script>
-<script src="./truck-network.js?v=12"></script>
+<script src="./nav-pro.js?v=13"></script>
+<script src="./truck-network.js?v=13"></script>
 <script>
   // Profil véhicule (Navigation Pro) — comptes reportés à plus tard
   let TRUCK = Object.assign({ hazmat: false }, NavPro.getActiveVehicleProfile());
@@ -1656,12 +1656,21 @@
   }
 
   /** Découpe un long trajet en segments < ~1100 km (limite Valhalla publique ~1500 km). */
-  async function fetchSegmentedTrip(costing, costingOptions, originLL, destLL) {
+  async function fetchSegmentedTrip(costing, costingOptions, originLL, destLL, segOpts) {
     if (!originLL || !destLL || typeof TruckNetwork.longHaulCorridorPoints !== 'function') {
       throw new Error('corridor long trajet indisponible');
     }
-    const points = TruckNetwork.longHaulCorridorPoints(originLL, destLL, 1100);
+    segOpts = segOpts || {};
+    const countryOnly = segOpts.countryOnly || null;
+    // Domestique : segments plus courts pour rester sur le corridor national (ex. Kenora / Baja)
+    const maxSegKm = countryOnly === 'MX' ? 550 : (countryOnly ? 900 : 1100);
+    const points = TruckNetwork.longHaulCorridorPoints(originLL, destLL, maxSegKm, {
+      countryOnly: countryOnly
+    });
     if (!points || points.length < 2) throw new Error('aucun corridor long trajet');
+    const borderExcludes = (countryOnly && typeof TruckNetwork.borderExcludeLocationsForDomestic === 'function')
+      ? TruckNetwork.borderExcludeLocationsForDomestic(countryOnly)
+      : null;
     routeNote.textContent = 'Long trajet : calcul en ' + (points.length - 1) + ' segments…';
     const trips = [];
     for (let i = 0; i < points.length - 1; i++) {
@@ -1672,7 +1681,13 @@
         { lat: a[0], lon: a[1], type: 'break' },
         { lat: b[0], lon: b[1], type: 'break' }
       ];
-      const trip = await fetchValhallaRaw(locs, costing, costingOptions, null, null);
+      let trip = null;
+      try {
+        trip = await fetchValhallaRaw(locs, costing, costingOptions, null, borderExcludes);
+      } catch (e1) {
+        // Sans excludes si Valhalla bloque trop
+        trip = await fetchValhallaRaw(locs, costing, costingOptions, null, null);
+      }
       trips.push(trip);
     }
     const stitched = stitchValhallaTrips(trips);
@@ -2097,6 +2112,46 @@
         }
 
         // —— Même pays : jamais de frontière ——
+        const odKmDomestic = haversine(origin[0], origin[1], destLatLng[0], destLatLng[1]) / 1000;
+        const needsDomesticSegments = odKmDomestic > 1300;
+
+        async function tryDomesticSegmented(costing, opts, label) {
+          try {
+            const seg = await fetchSegmentedTrip(costing, opts, origin, destLatLng, {
+              countryOnly: originCountry
+            });
+            if (seg && !crossesForeign(seg)) {
+              return {
+                best: {
+                  trip: seg,
+                  usedExcludes: false,
+                  score: scoreTripCandidate(seg, false)
+                },
+                ranked: [],
+                netInfoExtra: label + ' · multi-segments · reste au pays'
+              };
+            }
+          } catch (e) { /* ignore */ }
+          return null;
+        }
+
+        // A0) Très long trajet domestique (>~1300 km) : Valhalla public max ~1500 km
+        if (needsDomesticSegments) {
+          routeNote.textContent = 'Long trajet ' + originCountry + ' : découpage sans frontière…';
+          const truckSeg = await tryDomesticSegmented(
+            'truck',
+            truckHwyOpts,
+            'camion · ' + originCountry
+          );
+          if (truckSeg) return truckSeg;
+          const autoSeg = await tryDomesticSegmented(
+            'auto',
+            applyAvoidOptions('auto', { auto: {} }, true),
+            'réseau routier · ' + originCountry
+          );
+          if (autoSeg) return autoSeg;
+        }
+
         // A) Long trajet : forcer d'abord un corridor domestique
         if (longHaul && domesticVias.length) {
           routeNote.textContent = 'Calcul sans frontière (corridor ' + originCountry + ')…';
@@ -2133,6 +2188,16 @@
         routeNote.textContent = 'Secours réseau routier sans frontière…';
         const autoDirect = await tryAutoDomestic(excludes, null, 'réseau routier · sans frontière');
         if (autoDirect) return autoDirect;
+
+        // E) Secours multi-segments même si < 1300 km à vol d'oiseau (échec Valhalla)
+        const truckSegLate = await tryDomesticSegmented('truck', truckHwyOpts, 'camion · secours');
+        if (truckSegLate) return truckSegLate;
+        const autoSegLate = await tryDomesticSegmented(
+          'auto',
+          applyAvoidOptions('auto', { auto: {} }, true),
+          'réseau routier · secours'
+        );
+        if (autoSegLate) return autoSegLate;
 
         throw new Error(originCountry + ' → ' + destCountry + ' : aucun itinéraire sans frontière trouvé');
       }
