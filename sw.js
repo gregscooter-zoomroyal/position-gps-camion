@@ -2,7 +2,7 @@
  * Service worker Position · GPS Camion
  * Cache-first pour les assets statiques, network-first pour les navigations.
  */
-var CACHE_NAME = 'position-gps-v13'; // pages redeploy
+var CACHE_NAME = 'position-gps-v14';
 
 var STATIC_ASSETS = [
   './',
@@ -12,7 +12,7 @@ var STATIC_ASSETS = [
   './auth.js',
   'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css',
   'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js',
-  'https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Space+Mono:wght@400;700&display=swap'
+  'https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Space+Grotesk:wght@400;500;700&family=Space+Mono:wght@400;700&display=swap'
 ];
 
 self.addEventListener('install', function (event) {
