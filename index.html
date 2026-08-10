@@ -1039,8 +1039,8 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
-<script src="./nav-pro.js?v=15"></script>
-<script src="./truck-network.js?v=15"></script>
+<script src="./nav-pro.js?v=16"></script>
+<script src="./truck-network.js?v=16"></script>
 <script>
   // Profil véhicule (Navigation Pro) — comptes reportés à plus tard
   let TRUCK = Object.assign({ hazmat: false }, NavPro.getActiveVehicleProfile());
@@ -1151,6 +1151,13 @@
     const reMex = /\b(?:MEX|México|Mexico)\s*-?\s*(\d{1,3})\b/gi;
     while ((m = reMex.exec(src))) add('generic', m[1], 'MEX');
     return out.slice(0, 4);
+  }
+
+  function shieldHtml(s) {
+    return '<div class="road-shield ' + s.type + '" title="' + s.label + ' ' + s.num + '">' +
+      '<span class="shield-label">' + s.label + '</span>' +
+      '<span class="shield-num">' + s.num + '</span>' +
+      '</div>';
   }
 
   function renderGuidanceShields(streetText, instructionText) {
