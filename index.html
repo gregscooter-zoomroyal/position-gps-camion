@@ -2558,11 +2558,14 @@
 
   function syncRouteOptionInputs(){
     const o = NavPro.getRouteOptions();
-    // Migration : sans passeport / sans frontière par défaut
-    if (!o.avoidBorders) {
-      try { NavPro.setRouteOptions({ avoidBorders: true }); } catch (e) { /* ignore */ }
-      o.avoidBorders = true;
-    }
+    // Une seule migration vers « sans frontière » par défaut (v9)
+    try {
+      if (!localStorage.getItem('positionGps_borderDefault_v9')) {
+        NavPro.setRouteOptions({ avoidBorders: true });
+        localStorage.setItem('positionGps_borderDefault_v9', '1');
+        o.avoidBorders = true;
+      }
+    } catch (e) { /* ignore */ }
     document.getElementById('opt-tolls').checked = o.avoidTolls;
     document.getElementById('opt-ferries').checked = o.avoidFerries;
     document.getElementById('opt-borders').checked = o.avoidBorders;
