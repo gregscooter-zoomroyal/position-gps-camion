@@ -677,11 +677,24 @@
     (trip.legs || []).forEach(function (leg) {
       (leg.maneuvers || []).forEach(function (m) {
         var names = ((m.street_names || []).join(' '));
-        if (countryCode === 'US' && /\b(NY |VT |NH |ME |PA |US |I-|Interstate|State Route)/.test(names)) hit = true;
+        if (countryCode === 'US' && /\b(NY |VT |NH |ME |PA |US |I-|Interstate|State Route|New York|Vermont|New Hampshire|Maine)\b/i.test(names)) hit = true;
         if (countryCode === 'MX' && /\b(México|Mexico|MEX-)\b/i.test(names)) hit = true;
+        if (countryCode === 'CA' && /\b(QC |ON |Autoroute|Trans-Canada|Highway 401|A-15|A-20)\b/i.test(names)) hit = true;
       });
     });
     return hit;
+  }
+
+  /** Échantillonne un tracé [lat,lon]… pour détecter une sortie du pays d'origine. */
+  function routeLeavesCountry(routeCoords, homeCountry) {
+    if (!routeCoords || !routeCoords.length || !homeCountry || homeCountry === 'other') return false;
+    var foreign = 0;
+    var step = Math.max(1, Math.floor(routeCoords.length / 50));
+    for (var i = 0; i < routeCoords.length; i += step) {
+      var c = guessCountry(routeCoords[i][0], routeCoords[i][1]);
+      if (c !== 'other' && c !== homeCountry) foreign += 1;
+    }
+    return foreign >= 3;
   }
 
   function pointCountriesSame(a, b) {
@@ -717,6 +730,7 @@
     centeredInQuebec: centeredInQuebec,
     guessCountry: guessCountry,
     tripCrossesIntoCountry: tripCrossesIntoCountry,
+    routeLeavesCountry: routeLeavesCountry,
     pointCountriesSame: pointCountriesSame
   };
 })(typeof window !== 'undefined' ? window : this);
