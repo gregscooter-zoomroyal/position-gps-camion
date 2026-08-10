@@ -2,6 +2,9 @@
  * Comptes locaux Position · GPS Camion
  * Admin pré-créé + inscription client.
  * Stockage : localStorage (par navigateur / appareil).
+ *
+ * REPORTÉ : brancher ce module dans index.html (login / rôles) à la fin,
+ * après Navigation Pro. Ne pas supprimer — réutiliser tel quel.
  */
 (function (global) {
   const STORAGE_USERS = 'positionGpsUsers_v1';

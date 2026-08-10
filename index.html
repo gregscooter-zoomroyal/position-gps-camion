@@ -20,7 +20,7 @@
     --red: #FF3B3B;
     --blue: #5CA9FF;
     --route: #FFB238;
-    --sheet-h: min(42vh, 380px);
+    --sheet-h: min(46vh, 420px);
   }
 
   * { box-sizing: border-box; }
@@ -499,6 +499,184 @@
     font-size: 12px;
     line-height: 1.4;
   }
+
+  /* ── Navigation Pro ── */
+  body.nav-mode #sheet { display: none; }
+  body.nav-mode #map-stage { flex: 1; }
+  body.nav-mode header .title { font-size: 13px; }
+  body.nav-mode #guidance-banner { top: 8px; }
+
+  #nav-hud {
+    display: none;
+    position: absolute;
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+    z-index: 1000;
+    gap: 8px;
+  }
+  body.nav-mode #nav-hud { display: grid; grid-template-columns: repeat(3, 1fr); }
+  #nav-hud .hud-cell {
+    background: rgba(16,22,28,0.92);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 10px;
+    text-align: center;
+  }
+  #nav-hud .hud-label {
+    font-size: 9px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-bottom: 2px;
+  }
+  #nav-hud .hud-value {
+    font-family: 'Space Mono', monospace;
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--amber);
+  }
+
+  #speed-limit-badge {
+    display: none;
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    z-index: 1001;
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    border: 4px solid #E23;
+    background: #fff;
+    color: #111;
+    font-family: 'Space Mono', monospace;
+    font-weight: 700;
+    font-size: 18px;
+    align-items: center;
+    justify-content: center;
+  }
+  #speed-limit-badge.show { display: flex; }
+  body.nav-mode #speed-limit-badge { top: auto; bottom: 110px; }
+
+  #fab-row {
+    position: absolute;
+    right: 12px;
+    bottom: 12px;
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  body.nav-mode #fab-row { bottom: 110px; }
+  #fab-row button {
+    width: 48px;
+    height: 48px;
+    border-radius: 14px;
+    padding: 0;
+    font-size: 11px;
+    line-height: 1.1;
+  }
+
+  .check-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
+  .check-list label {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 10px 12px;
+    font-size: 13px;
+  }
+  .check-list input { accent-color: var(--amber); width: 18px; height: 18px; }
+
+  .list-card {
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 10px 12px;
+    margin-bottom: 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+  }
+  .list-card .meta {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+  .list-card .name { font-size: 13px; font-weight: 500; margin-bottom: 2px; }
+  .list-card .actions { display: flex; gap: 6px; flex-shrink: 0; }
+  .list-card .actions button {
+    width: auto;
+    padding: 8px 10px;
+    border-radius: 10px;
+    font-size: 11px;
+  }
+
+  select, input[type="number"] {
+    width: 100%;
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    font-size: 13px;
+    padding: 10px 12px;
+    margin-bottom: 8px;
+  }
+
+  .chip-row { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+  .chip-row button {
+    width: auto;
+    padding: 8px 12px;
+    border-radius: 999px;
+    font-size: 12px;
+    background: var(--panel-2);
+    color: var(--text);
+    border: 1px solid var(--line);
+  }
+  .chip-row button.active {
+    background: rgba(255,178,56,0.15);
+    color: var(--amber);
+    border-color: var(--amber-dim);
+  }
+
+  #lane-info {
+    display: none;
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    right: 72px;
+    z-index: 999;
+    background: rgba(16,22,28,0.9);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 8px 12px;
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+  body.nav-mode #lane-info { display: block; top: auto; bottom: 170px; right: 12px; }
+  #lane-info.has-content { display: block; }
+
+  .waypoint-item {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 8px;
+    align-items: center;
+  }
+  .waypoint-item input { flex: 1; margin: 0; border-radius: 24px; }
+  .waypoint-item button { width: auto; padding: 10px 12px; border-radius: 12px; }
+
+  #eta-traffic {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    color: var(--amber);
+    margin-top: 4px;
+  }
+
 </style>
 </head>
 <body>
@@ -514,6 +692,17 @@
     <div class="dist" id="guidance-dist">—</div>
     <div class="instr" id="guidance-instr">En attente d'itinéraire</div>
     <div class="street" id="guidance-street"></div>
+  </div>
+  <div id="speed-limit-badge" title="Limitation">—</div>
+  <div id="lane-info"></div>
+  <div id="nav-hud">
+    <div class="hud-cell"><div class="hud-label">Vitesse</div><div class="hud-value" id="hud-speed">—</div></div>
+    <div class="hud-cell"><div class="hud-label">Limite</div><div class="hud-value" id="hud-limit">—</div></div>
+    <div class="hud-cell"><div class="hud-label">ETA</div><div class="hud-value" id="hud-eta">—</div></div>
+  </div>
+  <div id="fab-row">
+    <button type="button" id="fab-nav" title="Mode navigation">NAV</button>
+    <button type="button" id="fab-share" class="stop" title="Partager">↗</button>
   </div>
 </div>
 
@@ -556,9 +745,22 @@
       <button id="toggle">Activer la localisation</button>
       <div id="accuracy-note">GPS camion uniquement (CA · US · MX). Autorise la position sur ton appareil — rien n'est envoyé ailleurs.</div>
       <div class="panel-title">Profil véhicule</div>
-      <div class="vehicle-card">
-        Drybox standard appliqué en permanence<br>
-        <strong>Hauteur 4,15 m</strong> (13′6″) · Largeur 2,6 m · Longueur 21,6 m · Masse 36,3 t<br>
+      <select id="vehicle-profile">
+        <option value="drybox">Drybox (4,15 m)</option>
+        <option value="plateau">Plateau</option>
+        <option value="fourgon">Fourgon</option>
+        <option value="custom">Personnalisé</option>
+      </select>
+      <div id="custom-vehicle" style="display:none;">
+        <input type="number" id="veh-height" step="0.01" placeholder="Hauteur m">
+        <input type="number" id="veh-width" step="0.01" placeholder="Largeur m">
+        <input type="number" id="veh-length" step="0.01" placeholder="Longueur m">
+        <input type="number" id="veh-weight" step="0.1" placeholder="Masse t">
+        <button type="button" id="veh-save">Enregistrer le profil</button>
+      </div>
+      <div class="vehicle-card" id="vehicle-card">
+        Profil camion actif<br>
+        <strong id="vehicle-summary">—</strong><br>
         Les ponts trop bas sont évités automatiquement.
       </div>
     </div>
@@ -579,6 +781,10 @@
         </div>
         <div class="field-error" id="origin-error"></div>
       </div>
+      <div class="panel-title">Étapes intermédiaires</div>
+      <div id="waypoints-list"></div>
+      <button type="button" id="waypoint-add" class="stop">Ajouter une étape</button>
+
       <div class="panel-title">Destination</div>
       <div class="search-row">
         <div class="search-wrap">
@@ -610,7 +816,20 @@
           <button id="voice-test" class="stop" type="button">Tester la voix</button>
         </div>
         <div class="truck-note" id="route-note"></div>
+        <div id="eta-traffic"></div>
+        <div class="btn-row" style="margin-top:8px;">
+          <button type="button" id="fav-save-dest">★ Favori</button>
+          <button type="button" id="share-eta" class="stop">Partager ETA</button>
+        </div>
         <button id="dest-clear" class="stop">Annuler la destination</button>
+      </div>
+
+      <div class="panel-title">Éviter</div>
+      <div class="check-list">
+        <label><input type="checkbox" id="opt-tolls"> Péages</label>
+        <label><input type="checkbox" id="opt-ferries"> Traversiers / ferries</label>
+        <label><input type="checkbox" id="opt-borders"> Frontières</label>
+        <label><input type="checkbox" id="opt-traffic" checked> ETA avec trafic estimé</label>
       </div>
     </div>
 
@@ -619,9 +838,18 @@
       <div class="truck-legend">
         <div><span class="swatch" style="background:rgba(255,255,255,0.55);"></span>Routes navigables camion</div>
         <div><span class="swatch" style="background:#FF3B3B;"></span>Quartiers / interdites</div>
-        <div><span class="swatch dot" style="background:#FFB238;"></span>Pont bas (&lt; 4,15 m)</div>
+        <div><span class="swatch dot" style="background:#FFB238;"></span>Pont bas (selon profil)</div>
       </div>
       <div class="truck-note" id="truck-note">Zoome au niveau rue pour voir les zones camion et les ponts bas (données OpenStreetMap).</div>
+
+      <div class="panel-title">Points d'intérêt camion</div>
+      <div class="check-list">
+        <label><input type="checkbox" id="poi-fuel"> Stations-service</label>
+        <label><input type="checkbox" id="poi-parking"> Stationnements PL</label>
+        <label><input type="checkbox" id="poi-rest"> Aires de repos / services</label>
+        <label><input type="checkbox" id="poi-weigh"> Pesées</label>
+      </div>
+      <div class="truck-note" id="poi-note">Active une catégorie pour la charger sur la carte (OpenStreetMap).</div>
     </div>
 
     <div class="tab-panel" data-panel="trajet">
@@ -642,6 +870,40 @@
       </div>
       <div class="btn-row" style="margin-top:8px;">
         <button id="track-clear" class="stop">Effacer le trajet</button>
+      </div>
+
+      <div class="panel-title">Historique des trajets</div>
+      <div id="history-list"></div>
+      <button type="button" id="history-clear" class="stop">Effacer l'historique</button>
+    </div>
+
+    <div class="tab-panel" data-panel="pro">
+      <div class="panel-title">Favoris &amp; adresses</div>
+      <div class="chip-row">
+        <button type="button" id="set-home">Définir domicile</button>
+        <button type="button" id="set-depot">Définir dépôt</button>
+        <button type="button" id="go-home">Aller domicile</button>
+        <button type="button" id="go-depot">Aller dépôt</button>
+      </div>
+      <div id="favorites-list"></div>
+
+      <div class="panel-title">Alertes (police / dangers)</div>
+      <div class="chip-row">
+        <button type="button" data-hazard="police">Police</button>
+        <button type="button" data-hazard="danger">Danger</button>
+        <button type="button" data-hazard="accident">Accident</button>
+        <button type="button" data-hazard="fermeture">Fermeture</button>
+      </div>
+      <div class="truck-note">Pose une alerte à ta position (ou au centre de la carte). Stockage local sur cet appareil.</div>
+      <div id="hazards-list"></div>
+
+      <div class="panel-title">Mode hors-ligne</div>
+      <div class="truck-note" id="offline-note">Le service worker met en cache l'app pour un usage partiel hors-ligne (carte et routage online restent nécessaires).</div>
+      <button type="button" id="offline-enable" class="stop">Activer le cache hors-ligne</button>
+
+      <div class="panel-title">Notifications ponts bas</div>
+      <div class="check-list">
+        <label><input type="checkbox" id="opt-bridge-notify" checked> Alerter à l'approche d'un pont bas</label>
       </div>
     </div>
 
@@ -664,21 +926,31 @@
       <svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
       Trajet
     </button>
+    <button type="button" class="tab-btn" data-tab="pro">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></svg>
+      Pro
+    </button>
   </nav>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="./nav-pro.js"></script>
 <script>
-  // Profil drybox / remorque standard Amérique du Nord (toujours actif)
-  const TRUCK = {
-    height: 4.15,   // m — 13'6"
-    width: 2.6,     // m — 8'6"
-    length: 21.64,  // m — tracteur + 53'
-    weight: 36.287, // t — ~80 000 lb
-    axle_load: 9.07,
-    axle_count: 5,
-    hazmat: false
-  };
+  // Profil véhicule (Navigation Pro) — comptes reportés à plus tard
+  let TRUCK = Object.assign({ hazmat: false }, NavPro.getActiveVehicleProfile());
+
+  let waypoints = []; // [{lat,lon,name,inputId?}]
+  let navMode = false;
+  let routeCoords = [];
+  let offRouteStreak = 0;
+  let lastTripMeta = null; // {distanceKm, durationSec, origin, destination}
+  let poiLayer = null;
+  let hazardLayer = null;
+  let announcedBridgeIds = new Set();
+  let announcedHazardIds = new Set();
+  let lastRoadInfoAt = 0;
+  let rerouteCooldownUntil = 0;
+  let baseRouteSeconds = 0;
 
   const VALHALLA_URL = 'https://valhalla1.openstreetmap.de/route';
   const OVERPASS_URL = 'https://overpass-api.de/api/interpreter';
@@ -698,6 +970,10 @@
   map.getPane('routePane').style.zIndex = 460;
   map.createPane('bridgePane');
   map.getPane('bridgePane').style.zIndex = 470;
+  map.createPane('poiPane');
+  map.getPane('poiPane').style.zIndex = 480;
+  map.createPane('hazardPane');
+  map.getPane('hazardPane').style.zIndex = 490;
 
   let marker = null;
   let accuracyCircle = null;
@@ -981,6 +1257,13 @@
         guidanceDistEl.textContent = '0 m';
         guidanceInstrEl.textContent = 'Arrivée';
         guidanceIndex = guidanceSteps.length;
+        if (lastTripMeta) {
+          try {
+            NavPro.saveTrip(lastTripMeta);
+            renderHistory();
+          } catch (e) { /* ignore */ }
+          lastTripMeta = null;
+        }
         return;
       }
       speak(announceDistance(VOICE_THRESHOLDS.now, step));
@@ -1191,6 +1474,14 @@
     if (routeLine) { map.removeLayer(routeLine); routeLine = null; }
     routeSummaryEl.textContent = '—';
     routeNote.textContent = '';
+    routeCoords = [];
+    baseRouteSeconds = 0;
+    lastTripMeta = null;
+    if (typeof routeLowBridges !== 'undefined') routeLowBridges = [];
+    const etaEl = document.getElementById('eta-traffic');
+    const hudEtaEl = document.getElementById('hud-eta');
+    if (etaEl) etaEl.textContent = '';
+    if (hudEtaEl) hudEtaEl.textContent = '—';
     resetGuidance();
   }
 
@@ -1232,12 +1523,31 @@
     return score;
   }
 
+  function buildRouteLocations(){
+    const origin = currentOrigin();
+    const locs = [{ lat: origin[0], lon: origin[1], type: 'break' }];
+    waypoints.forEach((wp) => {
+      if (wp && isFinite(wp.lat) && isFinite(wp.lon)) {
+        locs.push({ lat: wp.lat, lon: wp.lon, type: 'break' });
+      }
+    });
+    locs.push({ lat: destLatLng[0], lon: destLatLng[1], type: 'break' });
+    return locs;
+  }
+
+  function applyAvoidOptions(optsKey, opts){
+    const routeOpts = NavPro.getRouteOptions();
+    const block = opts[optsKey];
+    if (!block) return opts;
+    block.use_tolls = routeOpts.avoidTolls ? 0 : 0.8;
+    block.use_ferry = routeOpts.avoidFerries ? 0 : 0.5;
+    block.country_crossing_penalty = routeOpts.avoidBorders ? 5000 : 0;
+    return opts;
+  }
+
   async function fetchValhallaTrip(costing, costingOptions){
     const body = {
-      locations: [
-        { lat: currentOrigin()[0], lon: currentOrigin()[1], type: 'break' },
-        { lat: destLatLng[0], lon: destLatLng[1], type: 'break' }
-      ],
+      locations: buildRouteLocations(),
       costing,
       costing_options: costingOptions,
       directions_options: { units: 'kilometers', language: 'fr-FR' }
@@ -1265,7 +1575,7 @@
     routeNote.textContent = 'Calcul d\'un itinéraire poids lourd (préférence autoroutes, ponts < ' +
       TRUCK.height.toFixed(2).replace('.', ',') + ' m)…';
 
-    const truckOpts = {
+    const truckOpts = applyAvoidOptions('truck', {
       truck: {
         height: TRUCK.height,
         width: TRUCK.width,
@@ -1281,8 +1591,8 @@
         use_ferry: 0,
         country_crossing_penalty: 0
       }
-    };
-    const autoOpts = {
+    });
+    const autoOpts = applyAvoidOptions('auto', {
       auto: {
         use_highways: 1,
         use_tolls: 0.8,
@@ -1291,7 +1601,7 @@
         use_ferry: 0,
         shortest: false
       }
-    };
+    });
 
     try {
       // Valhalla « truck » évite parfois des autoroutes camion-légales (ex. A-35)
@@ -1341,12 +1651,32 @@
 
       const summary = trip.summary;
       routeSummaryEl.textContent = summary.length.toFixed(1) + ' km';
+      routeCoords = allCoords.slice();
+      offRouteStreak = 0;
+      baseRouteSeconds = summary.time || 0;
+      updateTrafficEtaDisplay(baseRouteSeconds);
+      lastTripMeta = {
+        distanceKm: summary.length || 0,
+        durationSec: baseRouteSeconds,
+        origin: currentOrigin() ? currentOrigin().slice() : null,
+        destination: destLatLng ? destLatLng.slice() : null
+      };
+      try {
+        NavPro.addRecent({
+          lat: destLatLng[0],
+          lon: destLatLng[1],
+          name: (destInput.value || 'Destination').slice(0, 80)
+        });
+        renderFavorites();
+      } catch (e) { /* ignore */ }
+      announcedBridgeIds = new Set();
       routeNote.textContent = 'Itinéraire camion : ' + summary.length.toFixed(1) + ' km · ' +
         fmtDuration(summary.time) + ' · ' + modeNote +
         ' · guidage vocal à 500 m, 100 m et au virage.';
-      map.fitBounds(routeLine.getBounds(), { padding: [40, 40] });
+      if (!navMode) map.fitBounds(routeLine.getBounds(), { padding: [40, 40] });
       startGuidance(trip);
       if (lastLatLng) updateGuidance(lastLatLng[0], lastLatLng[1]);
+      scanRouteForLowBridges();
     } catch (err) {
       clearRoute();
       routeNote.textContent = 'Impossible de calculer l\'itinéraire (' + err.message + ').';
@@ -1733,14 +2063,27 @@
       accuracyCircle.setRadius(accuracy);
     }
 
-    if (!hasCentered) {
+    if (navMode) {
+      const z = Math.max(map.getZoom(), 16);
+      map.setView(latlng, z, { animate: true });
+      hasCentered = true;
+    } else if (!hasCentered) {
       map.setView(latlng, 16);
       hasCentered = true;
     }
 
+    const speedKmh = speed != null ? Math.round(speed * 3.6) : null;
+    const hudSpeed = document.getElementById('hud-speed');
+    if (hudSpeed) hudSpeed.textContent = speedKmh != null ? speedKmh : '—';
+
     if (destLatLng) updateDestInfo();
     if (tracking) addTrackPoint(latitude, longitude, altitude);
     if (guidanceSteps.length) updateGuidance(latitude, longitude);
+
+    checkOffRoute(latitude, longitude);
+    checkNearbyHazards(latitude, longitude);
+    checkNearbyLowBridges(latitude, longitude);
+    maybeRefreshRoadInfo(latitude, longitude);
   }
 
   function onError(err){
@@ -1778,6 +2121,530 @@
     if (watchId == null) startWatch();
     else stopWatch();
   });
+
+
+  // ═══════════════════════════════════════════════════════════════
+  // Navigation Pro — intégration (comptes reportés à la fin)
+  // ═══════════════════════════════════════════════════════════════
+
+  const vehicleProfileSelect = document.getElementById('vehicle-profile');
+  const customVehicle = document.getElementById('custom-vehicle');
+  const vehicleSummary = document.getElementById('vehicle-summary');
+  const etaTrafficEl = document.getElementById('eta-traffic');
+  const fabNav = document.getElementById('fab-nav');
+  const fabShare = document.getElementById('fab-share');
+  const speedLimitBadge = document.getElementById('speed-limit-badge');
+  const laneInfoEl = document.getElementById('lane-info');
+  const hudLimit = document.getElementById('hud-limit');
+  const hudEta = document.getElementById('hud-eta');
+
+  function refreshVehicleUI(){
+    TRUCK = Object.assign({ hazmat: false }, NavPro.getActiveVehicleProfile());
+    if (vehicleProfileSelect) vehicleProfileSelect.value = TRUCK.id || 'drybox';
+    if (customVehicle) customVehicle.style.display = TRUCK.id === 'custom' ? 'block' : 'none';
+    if (vehicleSummary) {
+      vehicleSummary.textContent =
+        (TRUCK.name || TRUCK.id) + ' · H ' + TRUCK.height.toFixed(2) + ' m · L ' +
+        TRUCK.width.toFixed(2) + ' m · Long ' + TRUCK.length.toFixed(1) + ' m · ' +
+        TRUCK.weight.toFixed(1) + ' t';
+    }
+    if (TRUCK.id === 'custom') {
+      document.getElementById('veh-height').value = TRUCK.height;
+      document.getElementById('veh-width').value = TRUCK.width;
+      document.getElementById('veh-length').value = TRUCK.length;
+      document.getElementById('veh-weight').value = TRUCK.weight;
+    }
+  }
+
+  function syncRouteOptionInputs(){
+    const o = NavPro.getRouteOptions();
+    document.getElementById('opt-tolls').checked = o.avoidTolls;
+    document.getElementById('opt-ferries').checked = o.avoidFerries;
+    document.getElementById('opt-borders').checked = o.avoidBorders;
+    document.getElementById('opt-traffic').checked = o.useTraffic;
+  }
+
+  function updateTrafficEtaDisplay(baseSeconds){
+    if (!etaTrafficEl) return;
+    const o = NavPro.getRouteOptions();
+    if (!o.useTraffic || !baseSeconds) {
+      etaTrafficEl.textContent = '';
+      if (hudEta) hudEta.textContent = baseSeconds ? fmtDuration(baseSeconds) : '—';
+      return;
+    }
+    const factor = NavPro.estimateTrafficFactor(new Date());
+    const withTraffic = NavPro.applyTrafficEta(baseSeconds, factor);
+    const delayMin = Math.max(0, Math.round((withTraffic - baseSeconds) / 60));
+    etaTrafficEl.textContent = 'ETA trafic estimé : ' + fmtDuration(withTraffic) +
+      (delayMin ? ' (+' + delayMin + ' min vs fluide, ×' + factor.toFixed(2) + ')' : ' (fluide)');
+    if (hudEta) hudEta.textContent = fmtDuration(withTraffic);
+  }
+
+  function setNavMode(on){
+    navMode = !!on;
+    document.body.classList.toggle('nav-mode', navMode);
+    fabNav.textContent = navMode ? '✕' : 'NAV';
+    fabNav.classList.toggle('stop', navMode);
+    setTimeout(() => { try { map.invalidateSize(); } catch (e) {} }, 80);
+    if (navMode && lastLatLng) {
+      map.setView(lastLatLng, Math.max(map.getZoom(), 16));
+      speak('Mode navigation activé.');
+      NavPro.ensureNotificationPermission();
+    }
+  }
+
+  fabNav.addEventListener('click', () => setNavMode(!navMode));
+
+  async function shareCurrent(etaOnly){
+    const parts = [];
+    if (lastLatLng) {
+      parts.push('Position : ' + lastLatLng[0].toFixed(5) + ', ' + lastLatLng[1].toFixed(5));
+      parts.push('https://maps.google.com/?q=' + lastLatLng[0] + ',' + lastLatLng[1]);
+    }
+    if (destLatLng) {
+      parts.push('Destination : ' + destLatLng[0].toFixed(5) + ', ' + destLatLng[1].toFixed(5));
+    }
+    if (baseRouteSeconds) {
+      const o = NavPro.getRouteOptions();
+      const sec = o.useTraffic
+        ? NavPro.applyTrafficEta(baseRouteSeconds, NavPro.estimateTrafficFactor(new Date()))
+        : baseRouteSeconds;
+      parts.push('ETA estimée : ' + fmtDuration(sec));
+    }
+    const text = parts.join('\n') || 'Position GPS Camion';
+    const title = etaOnly ? 'ETA camion' : 'Position GPS Camion';
+    const ok = await NavPro.shareText(title, text);
+    if (!ok) {
+      await NavPro.copyText(text);
+      alert('Texte copié dans le presse-papiers.');
+    }
+  }
+  fabShare.addEventListener('click', () => shareCurrent(false));
+  document.getElementById('share-eta').addEventListener('click', () => shareCurrent(true));
+
+  document.getElementById('fav-save-dest').addEventListener('click', () => {
+    if (!destLatLng) return;
+    NavPro.addFavorite({
+      lat: destLatLng[0],
+      lon: destLatLng[1],
+      name: (destInput.value || 'Favori').slice(0, 80),
+      kind: 'favorite'
+    });
+    renderFavorites();
+    speak('Destination enregistrée en favori.');
+  });
+
+  // Waypoints
+  const waypointsList = document.getElementById('waypoints-list');
+  function renderWaypoints(){
+    waypointsList.innerHTML = '';
+    waypoints.forEach((wp, idx) => {
+      const row = document.createElement('div');
+      row.className = 'waypoint-item';
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.placeholder = 'Étape ' + (idx + 1);
+      input.value = wp.name || '';
+      input.autocomplete = 'off';
+      const wrap = document.createElement('div');
+      wrap.className = 'search-wrap';
+      wrap.style.flex = '1';
+      const sug = document.createElement('div');
+      sug.className = 'suggestions';
+      wrap.appendChild(input);
+      wrap.appendChild(sug);
+      const rm = document.createElement('button');
+      rm.type = 'button';
+      rm.className = 'stop';
+      rm.textContent = '✕';
+      rm.addEventListener('click', () => {
+        waypoints.splice(idx, 1);
+        renderWaypoints();
+        maybeAutoRoute();
+      });
+      row.appendChild(wrap);
+      row.appendChild(rm);
+      waypointsList.appendChild(row);
+      attachAutocomplete(input, sug, (latlng, name) => {
+        waypoints[idx] = { lat: latlng[0], lon: latlng[1], name: name || input.value };
+        updateDestInfo();
+        maybeAutoRoute();
+      });
+      input.addEventListener('change', async () => {
+        const q = input.value.trim();
+        if (q.length < 3) return;
+        try {
+          const latlng = await geocode(q);
+          waypoints[idx] = { lat: latlng[0], lon: latlng[1], name: q };
+          maybeAutoRoute();
+        } catch (e) { /* ignore */ }
+      });
+    });
+  }
+  document.getElementById('waypoint-add').addEventListener('click', () => {
+    waypoints.push({ lat: NaN, lon: NaN, name: '' });
+    renderWaypoints();
+  });
+
+  // Avoid options
+  ['opt-tolls','opt-ferries','opt-borders','opt-traffic'].forEach((id) => {
+    document.getElementById(id).addEventListener('change', () => {
+      NavPro.setRouteOptions({
+        avoidTolls: document.getElementById('opt-tolls').checked,
+        avoidFerries: document.getElementById('opt-ferries').checked,
+        avoidBorders: document.getElementById('opt-borders').checked,
+        useTraffic: document.getElementById('opt-traffic').checked
+      });
+      updateTrafficEtaDisplay(baseRouteSeconds);
+      maybeAutoRoute();
+    });
+  });
+
+  // Vehicle profile
+  vehicleProfileSelect.addEventListener('change', () => {
+    const id = vehicleProfileSelect.value;
+    if (id === 'custom') {
+      customVehicle.style.display = 'block';
+      NavPro.setActiveVehicleProfile('custom');
+    } else {
+      NavPro.setActiveVehicleProfile(id);
+    }
+    refreshVehicleUI();
+    maybeAutoRoute();
+    refreshTruckLayer();
+  });
+  document.getElementById('veh-save').addEventListener('click', () => {
+    NavPro.setActiveVehicleProfile({
+      id: 'custom',
+      name: 'Personnalisé',
+      height: parseFloat(document.getElementById('veh-height').value),
+      width: parseFloat(document.getElementById('veh-width').value),
+      length: parseFloat(document.getElementById('veh-length').value),
+      weight: parseFloat(document.getElementById('veh-weight').value),
+      axle_load: TRUCK.axle_load,
+      axle_count: TRUCK.axle_count
+    });
+    refreshVehicleUI();
+    maybeAutoRoute();
+    refreshTruckLayer();
+  });
+
+  // Off-route auto-reroute
+  function checkOffRoute(lat, lon){
+    if (!routeCoords.length || !destLatLng || routeLoading) return;
+    if (Date.now() < rerouteCooldownUntil) return;
+    const dist = NavPro.minDistanceToPolyline(lat, lon, routeCoords);
+    if (dist > 80) {
+      offRouteStreak++;
+      if (offRouteStreak >= 3) {
+        offRouteStreak = 0;
+        rerouteCooldownUntil = Date.now() + 20000;
+        speak('Hors itinéraire. Recalcul.');
+        routeNote.textContent = 'Hors itinéraire (' + Math.round(dist) + ' m) — recalcul…';
+        calculateTruckRoute();
+      }
+    } else {
+      offRouteStreak = 0;
+    }
+  }
+
+  // Road info: speed limit + lanes via Overpass
+  async function maybeRefreshRoadInfo(lat, lon){
+    if (Date.now() - lastRoadInfoAt < 12000) return;
+    lastRoadInfoAt = Date.now();
+    const d = 0.0007;
+    const bbox = (lat - d) + ',' + (lon - d) + ',' + (lat + d) + ',' + (lon + d);
+    const query = '[out:json][timeout:15];way["highway"](' + bbox + ');out tags center 8;';
+    try {
+      const res = await fetch(OVERPASS_URL, { method: 'POST', body: 'data=' + encodeURIComponent(query) });
+      if (!res.ok) return;
+      const data = await res.json();
+      let best = null;
+      let bestDist = Infinity;
+      (data.elements || []).forEach((el) => {
+        if (!el.center) return;
+        const dd = haversine(lat, lon, el.center.lat, el.center.lon);
+        if (dd < bestDist) { bestDist = dd; best = el; }
+      });
+      if (!best || !best.tags) return;
+      const tags = best.tags;
+      const maxspeed = tags.maxspeed || tags['maxspeed:hgv'] || null;
+      const lanes = tags.lanes || tags['lanes:forward'] || null;
+      const name = tags.name || tags.ref || 'Route';
+      if (maxspeed) {
+        const n = parseInt(String(maxspeed).replace(/[^0-9]/g, ''), 10);
+        speedLimitBadge.textContent = isFinite(n) ? String(n) : '—';
+        speedLimitBadge.classList.add('show');
+        if (hudLimit) hudLimit.textContent = isFinite(n) ? n : '—';
+      }
+      const bits = [name];
+      if (lanes) bits.push(lanes + ' voie(s)');
+      if (tags.maxspeed) bits.push('limite ' + tags.maxspeed);
+      if (tags['maxspeed:hgv']) bits.push('PL ' + tags['maxspeed:hgv']);
+      laneInfoEl.textContent = bits.join(' · ');
+      laneInfoEl.classList.add('has-content');
+    } catch (e) { /* ignore */ }
+  }
+
+  // Low bridges along route / nearby alerts
+  let routeLowBridges = [];
+  async function scanRouteForLowBridges(){
+    routeLowBridges = [];
+    if (!routeCoords.length) return;
+    // sample every ~25th point to build bbox union — use overall bbox
+    let minLat = 90, maxLat = -90, minLon = 180, maxLon = -180;
+    routeCoords.forEach((c) => {
+      minLat = Math.min(minLat, c[0]); maxLat = Math.max(maxLat, c[0]);
+      minLon = Math.min(minLon, c[1]); maxLon = Math.max(maxLon, c[1]);
+    });
+    const bbox = minLat + ',' + minLon + ',' + maxLat + ',' + maxLon;
+    const query = '[out:json][timeout:25];(node["maxheight"](' + bbox + ');way["maxheight"]["bridge"](' + bbox + '););out body center;';
+    try {
+      const res = await fetch(OVERPASS_URL, { method: 'POST', body: 'data=' + encodeURIComponent(query) });
+      if (!res.ok) return;
+      const data = await res.json();
+      (data.elements || []).forEach((el) => {
+        const tags = el.tags || {};
+        const h = parseMaxheightMeters(tags.maxheight);
+        if (h == null || h >= TRUCK.height) return;
+        const lat = el.lat || (el.center && el.center.lat);
+        const lon = el.lon || (el.center && el.center.lon);
+        if (lat == null) return;
+        const onRoute = NavPro.minDistanceToPolyline(lat, lon, routeCoords) < 60;
+        if (!onRoute) return;
+        routeLowBridges.push({
+          id: el.type + '/' + el.id,
+          lat, lon, height: h,
+          name: tags.name || 'Pont bas'
+        });
+      });
+    } catch (e) { /* ignore */ }
+  }
+
+  function checkNearbyLowBridges(lat, lon){
+    if (!document.getElementById('opt-bridge-notify').checked) return;
+    routeLowBridges.forEach((br) => {
+      if (announcedBridgeIds.has(br.id)) return;
+      const d = haversine(lat, lon, br.lat, br.lon);
+      if (d < 400) {
+        announcedBridgeIds.add(br.id);
+        const msg = 'Attention. Pont bas à ' + Math.round(d) + ' mètres. Hauteur ' +
+          br.height.toFixed(2) + ' mètres.';
+        speak(msg);
+        NavPro.notify('Pont bas', br.name + ' · ' + br.height.toFixed(2) + ' m');
+      }
+    });
+  }
+
+  function checkNearbyHazards(lat, lon){
+    const near = NavPro.nearbyHazards(lat, lon, 350);
+    near.forEach((h) => {
+      if (announcedHazardIds.has(h.id)) return;
+      announcedHazardIds.add(h.id);
+      const label = ({ police:'Police', danger:'Danger', accident:'Accident', fermeture:'Fermeture' })[h.type] || 'Alerte';
+      speak('Alerte ' + label + ' à proximité.');
+      NavPro.notify(label, h.note || 'Alerte signalée sur le parcours');
+    });
+  }
+
+  // POI layers
+  const poiColors = { fuel: '#5CA9FF', parking: '#4ADE80', rest: '#FFB238', weigh: '#FF3B3B' };
+  async function refreshPoiLayer(){
+    const enabled = ['fuel','parking','rest','weigh'].filter((k) => document.getElementById('poi-' + k).checked);
+    if (poiLayer) { map.removeLayer(poiLayer); poiLayer = null; }
+    if (!enabled.length) {
+      document.getElementById('poi-note').textContent = 'Aucune catégorie POI active.';
+      return;
+    }
+    if (map.getZoom() < 11) {
+      document.getElementById('poi-note').textContent = 'Zoome davantage pour charger les POI camion.';
+      return;
+    }
+    document.getElementById('poi-note').textContent = 'Chargement des POI…';
+    const b = map.getBounds();
+    const bbox = {
+      south: b.getSouth(), west: b.getWest(), north: b.getNorth(), east: b.getEast()
+    };
+    const query = NavPro.buildPoiOverpassQuery(bbox);
+    try {
+      const res = await fetch(OVERPASS_URL, { method: 'POST', body: 'data=' + encodeURIComponent(query) });
+      if (!res.ok) throw new Error('service indisponible');
+      const data = await res.json();
+      const parsed = NavPro.parsePoiOverpassResponse(data);
+      poiLayer = L.layerGroup().addTo(map);
+      let count = 0;
+      enabled.forEach((cat) => {
+        (parsed[cat] || []).forEach((p) => {
+          count++;
+          const m = L.circleMarker([p.lat, p.lon], {
+            pane: 'poiPane', radius: 6, color: '#0A0E12', weight: 1,
+            fillColor: poiColors[cat], fillOpacity: 0.95
+          }).addTo(poiLayer);
+          m.bindPopup('<strong>' + (p.name || cat) + '</strong><br>' + cat);
+        });
+      });
+      document.getElementById('poi-note').textContent = count + ' point(s) d\'intérêt affiché(s).';
+    } catch (err) {
+      document.getElementById('poi-note').textContent = 'POI indisponibles (' + err.message + ').';
+    }
+  }
+  const debouncedPoi = debounce(refreshPoiLayer, 700);
+  ['poi-fuel','poi-parking','poi-rest','poi-weigh'].forEach((id) => {
+    document.getElementById(id).addEventListener('change', debouncedPoi);
+  });
+  map.on('moveend', debouncedPoi);
+
+  // Hazards UI
+  function hazardLabel(type){
+    return ({ police:'Police', danger:'Danger', accident:'Accident', fermeture:'Fermeture' })[type] || type;
+  }
+  function renderHazards(){
+    const list = document.getElementById('hazards-list');
+    list.innerHTML = '';
+    if (hazardLayer) { map.removeLayer(hazardLayer); hazardLayer = null; }
+    hazardLayer = L.layerGroup().addTo(map);
+    NavPro.listHazards().forEach((h) => {
+      const card = document.createElement('div');
+      card.className = 'list-card';
+      card.innerHTML = '<div><div class="name">' + hazardLabel(h.type) + '</div><div class="meta">' +
+        (h.note || '') + '</div></div>';
+      const actions = document.createElement('div');
+      actions.className = 'actions';
+      const del = document.createElement('button');
+      del.className = 'stop';
+      del.textContent = 'Suppr.';
+      del.addEventListener('click', () => { NavPro.removeHazard(h.id); renderHazards(); });
+      actions.appendChild(del);
+      card.appendChild(actions);
+      list.appendChild(card);
+      L.circleMarker([h.lat, h.lon], {
+        pane: 'hazardPane', radius: 8, color: '#0A0E12', weight: 2,
+        fillColor: '#FF3B3B', fillOpacity: 0.95
+      }).bindPopup(hazardLabel(h.type) + (h.note ? '<br>' + h.note : '')).addTo(hazardLayer);
+    });
+  }
+  document.querySelectorAll('[data-hazard]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const pos = lastLatLng || [map.getCenter().lat, map.getCenter().lng];
+      const note = prompt('Note pour l\'alerte (optionnel)') || '';
+      NavPro.addHazard({ type: btn.dataset.hazard, lat: pos[0], lon: pos[1], note });
+      renderHazards();
+      speak('Alerte ' + hazardLabel(btn.dataset.hazard) + ' signalée.');
+    });
+  });
+
+  // Favorites
+  function renderFavorites(){
+    const list = document.getElementById('favorites-list');
+    list.innerHTML = '';
+    const items = NavPro.listFavorites().slice().reverse();
+    if (!items.length) {
+      list.innerHTML = '<div class="truck-note">Aucun favori pour l\'instant.</div>';
+      return;
+    }
+    items.forEach((f) => {
+      const card = document.createElement('div');
+      card.className = 'list-card';
+      const kind = f.kind === 'home' ? 'Domicile' : f.kind === 'depot' ? 'Dépôt' : f.kind === 'recent' ? 'Récent' : 'Favori';
+      card.innerHTML = '<div><div class="name">' + kind + ' · ' + f.name + '</div><div class="meta">' +
+        f.lat.toFixed(4) + ', ' + f.lon.toFixed(4) + '</div></div>';
+      const actions = document.createElement('div');
+      actions.className = 'actions';
+      const go = document.createElement('button');
+      go.textContent = 'Go';
+      go.addEventListener('click', () => {
+        setDestination([f.lat, f.lon]);
+        destInput.value = f.name;
+        switchTab('go');
+      });
+      const del = document.createElement('button');
+      del.className = 'stop';
+      del.textContent = '✕';
+      del.addEventListener('click', () => { NavPro.removeFavorite(f.id); renderFavorites(); });
+      actions.appendChild(go);
+      actions.appendChild(del);
+      card.appendChild(actions);
+      list.appendChild(card);
+    });
+  }
+  function setSpecialFavorite(kind){
+    const pos = destLatLng || lastLatLng || [map.getCenter().lat, map.getCenter().lng];
+    const name = kind === 'home' ? 'Domicile' : 'Dépôt';
+    NavPro.addFavorite({ lat: pos[0], lon: pos[1], name, kind });
+    renderFavorites();
+  }
+  function goSpecialFavorite(kind){
+    const f = NavPro.listFavorites().find((x) => x.kind === kind);
+    if (!f) { alert('Aucun ' + (kind === 'home' ? 'domicile' : 'dépôt') + ' défini.'); return; }
+    setDestination([f.lat, f.lon]);
+    destInput.value = f.name;
+    switchTab('go');
+  }
+  document.getElementById('set-home').addEventListener('click', () => setSpecialFavorite('home'));
+  document.getElementById('set-depot').addEventListener('click', () => setSpecialFavorite('depot'));
+  document.getElementById('go-home').addEventListener('click', () => goSpecialFavorite('home'));
+  document.getElementById('go-depot').addEventListener('click', () => goSpecialFavorite('depot'));
+
+  // History
+  function renderHistory(){
+    const list = document.getElementById('history-list');
+    list.innerHTML = '';
+    const items = NavPro.listTripHistory();
+    if (!items.length) {
+      list.innerHTML = '<div class="truck-note">Aucun trajet enregistré.</div>';
+      return;
+    }
+    items.forEach((t) => {
+      const card = document.createElement('div');
+      card.className = 'list-card';
+      const when = (t.date || '').slice(0, 16).replace('T', ' ');
+      card.innerHTML = '<div><div class="name">' + when + '</div><div class="meta">' +
+        (t.distanceKm || 0).toFixed(1) + ' km · ' + fmtDuration(t.durationSec || 0) + '</div></div>';
+      if (t.destination) {
+        const actions = document.createElement('div');
+        actions.className = 'actions';
+        const go = document.createElement('button');
+        go.textContent = 'Rejouer';
+        go.addEventListener('click', () => {
+          setDestination([t.destination[0], t.destination[1]]);
+          switchTab('go');
+        });
+        actions.appendChild(go);
+        card.appendChild(actions);
+      }
+      list.appendChild(card);
+    });
+  }
+  document.getElementById('history-clear').addEventListener('click', () => {
+    NavPro.clearTripHistory();
+    renderHistory();
+  });
+
+  // Offline
+  document.getElementById('offline-enable').addEventListener('click', async () => {
+    const note = document.getElementById('offline-note');
+    try {
+      const reg = await NavPro.registerServiceWorker('./sw.js');
+      note.textContent = (reg && reg.ok)
+        ? 'Cache hors-ligne activé. Recharge la page une fois pour finaliser.'
+        : 'Service worker non supporté ou échec (' + ((reg && (reg.reason || reg.error)) || 'inconnu') + ').';
+    } catch (e) {
+      note.textContent = 'Impossible d\'activer le cache : ' + (e.message || e);
+    }
+  });
+
+  // Refresh traffic ETA periodically
+  setInterval(() => updateTrafficEtaDisplay(baseRouteSeconds), 60000);
+
+  // Init UI from storage
+  refreshVehicleUI();
+  syncRouteOptionInputs();
+  renderFavorites();
+  renderHazards();
+  renderHistory();
+  renderWaypoints();
+  try { NavPro.registerServiceWorker('./sw.js'); } catch (e) { /* ignore */ }
+
 
   // Onglets style Google / Waze
   function switchTab(name){
