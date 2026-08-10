@@ -644,20 +644,38 @@
   /** Estimation grossière du pays d'un point (CA / US / MX / other). */
   function guessCountry(lat, lon) {
     if (!isFinite(lat) || !isFinite(lon)) return 'other';
-    // Mexique (contiguous)
-    if (lat < 32.6 && lat > 14.5 && lon < -86.5 && lon > -117.5) return 'MX';
+
+    // --- Poches US le long de la frontière mexicaine (avant le bbox MX) ---
+    // San Diego / Chula Vista (au nord de la ligne frontière ~32.54)
+    if (lat >= 32.56 && lat < 33.6 && lon <= -116.9 && lon >= -117.4) return 'US';
+    // Imperial Valley US (Calexico / El Centro) — Mexicali plus au sud
+    if (lat >= 32.68 && lat < 33.5 && lon <= -114.5 && lon >= -116.9) return 'US';
+    // Arizona / Sonora : frontière approximative (pas tout le nord du Sonora)
+    if (lon <= -108.9 && lon >= -114.9 && lat < 33.0 && lat > 31.0) {
+      var azBorder = lon <= -114.5 ? 32.45
+        : lon <= -113.0 ? 32.25
+        : lon <= -111.0 ? 31.90
+        : 31.35;
+      if (lat >= azBorder) return 'US';
+    }
+    // New Mexico sud / El Paso (US) — Juárez plus au sud
+    if (lat >= 31.78 && lat < 32.6 && lon <= -103.0 && lon >= -109.1) return 'US';
+    // El Paso vs Ciudad Juárez
+    if (lat >= 31.55 && lat <= 32.05 && lon <= -106.1 && lon >= -106.75) {
+      return lat >= 31.78 ? 'US' : 'MX';
+    }
+
+    // Mexique (contiguous) — borne N un peu au-dessus pour Mexicali / Baja
+    // (les poches US San Diego / Imperial / AZ / NM sont déjà retournées plus haut)
+    if (lat < 32.72 && lat > 14.5 && lon < -86.5 && lon > -117.5) return 'MX';
     // Alaska
     if (lat > 51 && lon < -130) return 'US';
 
     // --- Canada atlantique / Québec / Ontario / Prairies / côte ---
     // Sud de l'Ontario (Toronto, Hamilton, Niagara CA, Windsor) : lat < 45 mais CANADA
-    // Règle : au nord du lac Ontario / Érié côté canadien.
     if (lat >= 41.65 && lat < 45.05 && lon <= -74.5 && lon >= -83.6) {
-      // Pocket US : rive sud du lac Ontario (Rochester / Syracuse) ~ lat < 43.35, lon -79.2..-76.0
       if (lat < 43.35 && lon > -79.25 && lon < -76.0) return 'US';
-      // Pocket US : Buffalo / Niagara US ~ lat < 43.2, lon -79.2..-78.7
       if (lat < 43.15 && lon >= -79.3 && lon <= -78.7) return 'US';
-      // Michigan inférieur (Détroit) — laisser Windsor (CA) à l'est de la rivière
       if (lat < 42.6 && lon > -83.6 && lon < -83.12) return 'US';
       return 'CA';
     }
@@ -750,19 +768,17 @@
         pts.push({ lat: 26.2, lon: lon });
       }
     } else if (homeCountry === 'MX') {
-      // Frontière USA (côté sud) — Empêche MX→MX via Texas/Arizona/Californie
-      for (lon = -117.0; lon <= -97.5; lon += 1.0) {
-        pts.push({ lat: 32.45, lon: lon });
-        pts.push({ lat: 31.7, lon: lon });
+      // Frontière USA (côté sud) — éviter de bloquer Tijuana / Juárez / Mexicali
+      for (lon = -116.5; lon <= -97.5; lon += 1.2) {
+        pts.push({ lat: 32.75, lon: lon }); // un peu au nord, côté US
       }
-      for (lon = -106.8; lon <= -97.2; lon += 0.9) {
-        pts.push({ lat: 29.5, lon: lon });
-        pts.push({ lat: 27.8, lon: lon });
+      for (lon = -112.0; lon <= -108.5; lon += 1.0) {
+        pts.push({ lat: 31.5, lon: lon }); // Arizona US
       }
-      pts.push({ lat: 32.55, lon: -117.05 }); // Tijuana / San Diego
-      pts.push({ lat: 31.70, lon: -106.45 }); // Juárez / El Paso
-      pts.push({ lat: 27.50, lon: -99.50 });  // Laredo
-      pts.push({ lat: 25.95, lon: -97.45 });  // Brownsville / Matamoros
+      pts.push({ lat: 32.70, lon: -117.10 }); // San Diego
+      pts.push({ lat: 31.85, lon: -106.45 }); // El Paso
+      pts.push({ lat: 27.55, lon: -99.50 });  // Laredo US
+      pts.push({ lat: 26.10, lon: -98.20 });  // McAllen
     }
     return pts.slice(0, 48);
   }
@@ -858,21 +874,29 @@
   /**
    * Hubs NA pour découper les longs trajets (Valhalla public ~1500 km max).
    * Retourne [origin, ...vias, dest] avec chaque saut haversine < maxSegKm.
+   * opts.countryOnly = 'CA'|'US'|'MX' → hubs du pays seulement (trajet domestique).
    */
   var LONG_HAUL_HUBS = [
-    // Canada
-    [45.50, -73.57], // Montréal
+    // Canada — corridor Transcanadienne (évite le Midwest US)
     [46.81, -71.21], // Québec
+    [45.50, -73.57], // Montréal
     [45.40, -71.90], // Sherbrooke
-    [43.65, -79.38], // Toronto
-    [42.98, -81.25], // London ON
-    [42.31, -83.04], // Windsor
     [45.42, -75.70], // Ottawa
+    [44.31, -76.55], // Kingston
+    [43.65, -79.38], // Toronto
+    [46.49, -80.99], // Sudbury
+    [46.52, -84.35], // Sault Ste. Marie (CA)
+    [48.38, -89.25], // Thunder Bay
+    [49.77, -94.49], // Kenora
     [49.90, -97.14], // Winnipeg
     [50.45, -104.61], // Regina
+    [52.13, -106.67], // Saskatoon
     [51.05, -114.07], // Calgary
     [53.55, -113.49], // Edmonton
+    [50.67, -120.33], // Kamloops
     [49.28, -123.12], // Vancouver
+    [42.98, -81.25], // London ON
+    [42.31, -83.04], // Windsor
     // USA
     [42.89, -78.88], // Buffalo
     [42.33, -83.05], // Detroit
@@ -884,7 +908,7 @@
     [32.78, -96.80], // Dallas
     [29.76, -95.37], // Houston
     [27.50, -99.51], // Laredo
-    [31.76, -106.49], // El Paso
+    [31.78, -106.44], // El Paso (US)
     [33.45, -112.07], // Phoenix
     [34.05, -118.24], // Los Angeles
     [36.17, -115.14], // Las Vegas
@@ -898,8 +922,25 @@
     [35.23, -80.84], // Charlotte
     [30.27, -97.74], // Austin
     [29.42, -98.49], // San Antonio
-    // Mexique
-    [32.53, -117.04], // Tijuana
+    [45.52, -122.68], // Portland
+    [41.26, -95.94], // Omaha
+    [46.88, -96.79], // Fargo
+    [35.08, -106.65], // Albuquerque
+    [35.20, -111.65], // Flagstaff
+    [36.12, -115.17], // Las Vegas (dup ok)
+    [40.76, -111.89], // Salt Lake City
+    // Mexique (rester au sud de la frontière)
+    [32.51, -117.08], // Tijuana
+    [31.87, -116.62], // Ensenada
+    [32.55, -116.63], // Tecate
+    [32.64, -115.47], // Mexicali
+    [32.46, -114.77], // San Luis Río Colorado
+    [31.32, -113.54], // Puerto Peñasco
+    [31.69, -106.42], // Ciudad Juárez
+    [29.07, -110.96], // Hermosillo
+    [27.48, -109.93], // Ciudad Obregón
+    [24.81, -107.39], // Culiacán
+    [23.25, -106.41], // Mazatlán
     [28.63, -106.07], // Chihuahua
     [25.69, -100.32], // Monterrey
     [22.16, -100.99], // San Luis Potosí
@@ -909,13 +950,33 @@
     [19.05, -98.20]  // Puebla
   ];
 
-  function longHaulCorridorPoints(origin, dest, maxSegKm) {
+  function longHaulCorridorPoints(origin, dest, maxSegKm, opts) {
     if (!origin || !dest) return null;
+    opts = opts || {};
+    var countryOnly = opts.countryOnly || null;
     var maxM = (maxSegKm && maxSegKm > 0 ? maxSegKm : 1100) * 1000;
     var direct = haversineM(origin[0], origin[1], dest[0], dest[1]);
     if (direct <= maxM * 0.95) return [origin, dest];
 
-    var nodes = LONG_HAUL_HUBS.slice();
+    // Domestique : le grand cercle traverse souvent un autre pays → détour autorisé plus large
+    var maxDetourFactor = countryOnly ? 2.8 : 1.55;
+
+    // Baja nord (Tijuana) → intérieur MX : passer par Ensenada (évite Hwy 2 / frontière US)
+    if (countryOnly === 'MX' && origin[0] > 32.0 && origin[1] < -116.2 && dest[1] > -115.5) {
+      var ensenada = [31.87, -116.62];
+      if (haversineM(origin[0], origin[1], ensenada[0], ensenada[1]) > 15000) {
+        var restPath = longHaulCorridorPoints(ensenada, dest, maxSegKm, opts);
+        if (restPath && restPath.length) {
+          return [origin].concat(restPath);
+        }
+      }
+    }
+
+    var nodes = LONG_HAUL_HUBS.filter(function (p) {
+      if (!countryOnly) return true;
+      return guessCountry(p[0], p[1]) === countryOnly;
+    });
+
     // Indices : 0 = origin, 1 = dest, 2.. = hubs
     var pts = [origin, dest].concat(nodes);
     var n = pts.length;
@@ -945,15 +1006,16 @@
       if (u === 1) break;
       for (j = 0; j < n; j++) {
         if (visited[j]) continue;
+        // Ne jamais enchaîner vers un hub hors pays en mode domestique
+        if (countryOnly && j >= 2 && guessCountry(pts[j][0], pts[j][1]) !== countryOnly) continue;
         var d = haversineM(pts[u][0], pts[u][1], pts[j][0], pts[j][1]);
         if (d > maxM) continue;
-        // Légère pénalité hors corridor (éloignement de la ligne OD)
         var detour = 0;
         if (u !== 0 && j !== 1) {
           var viaOd = haversineM(origin[0], origin[1], pts[j][0], pts[j][1]) +
             haversineM(pts[j][0], pts[j][1], dest[0], dest[1]);
-          if (viaOd > direct * 1.55) continue;
-          detour = Math.max(0, viaOd - direct) * 0.15;
+          if (viaOd > direct * maxDetourFactor) continue;
+          detour = Math.max(0, viaOd - direct) * 0.12;
         }
         var nd = dist[u] + d + detour;
         if (nd < dist[j]) {
@@ -964,7 +1026,40 @@
     }
 
     if (prev[1] < 0 || !isFinite(dist[1])) {
-      // Secours : interpolation le long du grand cercle
+      // Secours domestique : suivre les hubs du pays par longitude (pas le grand cercle)
+      if (countryOnly && nodes.length) {
+        var goingWest = dest[1] < origin[1];
+        var ordered = nodes.slice().sort(function (a, b) {
+          return goingWest ? (b[1] - a[1]) : (a[1] - b[1]);
+        });
+        var pathDom = [origin];
+        var last = origin;
+        for (i = 0; i < ordered.length; i++) {
+          var hub = ordered[i];
+          var between = goingWest
+            ? (hub[1] < last[1] - 0.3 && hub[1] > dest[1] - 0.5)
+            : (hub[1] > last[1] + 0.3 && hub[1] < dest[1] + 0.5);
+          if (!between) continue;
+          if (haversineM(last[0], last[1], hub[0], hub[1]) < 40000) continue;
+          if (haversineM(hub[0], hub[1], dest[0], dest[1]) < 40000) continue;
+          // Couper si saut trop long : insérer hubs intermédiaires déjà dans ordered plus tard
+          if (haversineM(last[0], last[1], hub[0], hub[1]) > maxM) continue;
+          pathDom.push(hub);
+          last = hub;
+        }
+        pathDom.push(dest);
+        // Si un saut reste trop long, échouer plutôt que de traverser la frontière
+        var okDom = true;
+        for (i = 0; i < pathDom.length - 1; i++) {
+          if (haversineM(pathDom[i][0], pathDom[i][1], pathDom[i + 1][0], pathDom[i + 1][1]) > maxM) {
+            okDom = false;
+            break;
+          }
+        }
+        if (okDom && pathDom.length >= 2) return pathDom;
+        return null;
+      }
+      // International : interpolation grand cercle OK
       var steps = Math.ceil(direct / (maxM * 0.85));
       var path = [origin];
       for (i = 1; i < steps; i++) {
@@ -986,11 +1081,10 @@
       if (i < 0) break;
     }
     chain.reverse();
-    // Dédupliquer points trop proches
     var out = [chain[0]];
     for (i = 1; i < chain.length; i++) {
-      var last = out[out.length - 1];
-      if (haversineM(last[0], last[1], chain[i][0], chain[i][1]) > 25000) {
+      var lastP = out[out.length - 1];
+      if (haversineM(lastP[0], lastP[1], chain[i][0], chain[i][1]) > 25000) {
         out.push(chain[i]);
       } else if (i === chain.length - 1) {
         out[out.length - 1] = chain[i];
