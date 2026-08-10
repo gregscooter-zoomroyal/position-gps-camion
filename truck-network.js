@@ -47,6 +47,13 @@
       note: 'Réseau national autorisé aux combinaisons conventionnelles (23 CFR 658)'
     },
     {
+      country: 'CA/US/MX',
+      name: 'Quartiers industriels (OpenStreetMap)',
+      map: 'https://www.openstreetmap.org/',
+      data: 'https://wiki.openstreetmap.org/wiki/Tag:landuse%3Dindustrial',
+      note: 'Zones industrielles = camion permis (affichées en vert)'
+    },
+    {
       country: 'MX',
       name: 'INEGI Red Nacional de Caminos + API de Ruteo',
       map: 'https://www.inegi.org.mx/app/mapa/espacioydatos/',
@@ -206,10 +213,152 @@
     return lat >= 45.0 && lon <= -71.0 && lon >= -79.5;
   }
 
+  var OVERPASS_URLS = [
+    'https://overpass-api.de/api/interpreter',
+    'https://maps.mail.ru/osm/tools/overpass/api/interpreter'
+  ];
+
+  function pointInLonLatRing(lat, lon, ring) {
+    var inside = false;
+    for (var i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      var xi = ring[i][0];
+      var yi = ring[i][1];
+      var xj = ring[j][0];
+      var yj = ring[j][1];
+      var intersect = ((yi > lat) !== (yj > lat)) &&
+        (lon < (xj - xi) * (lat - yi) / ((yj - yi) || 1e-12) + xi);
+      if (intersect) inside = !inside;
+    }
+    return inside;
+  }
+
+  function pointInIndustrialPolygons(lat, lon, polygons) {
+    if (!polygons || !polygons.length || !isFinite(lat) || !isFinite(lon)) return false;
+    for (var i = 0; i < polygons.length; i++) {
+      var rings = polygons[i];
+      if (!rings || !rings.length) continue;
+      if (pointInLonLatRing(lat, lon, rings[0])) return true;
+    }
+    return false;
+  }
+
+  async function overpassJson(query) {
+    var lastErr = null;
+    for (var i = 0; i < OVERPASS_URLS.length; i++) {
+      try {
+        var res = await fetch(OVERPASS_URLS[i], {
+          method: 'POST',
+          body: 'data=' + encodeURIComponent(query)
+        });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        return await res.json();
+      } catch (e) {
+        lastErr = e;
+      }
+    }
+    throw lastErr || new Error('Overpass indisponible');
+  }
+
+  /**
+   * Zones industrielles OSM (CA / US / MX) : routes à l'intérieur = camion permis (vert).
+   */
+  async function fetchIndustrialTruckNetwork(bbox, maxFeatures) {
+    var bb = [bbox.south, bbox.west, bbox.north, bbox.east].join(',');
+    var query =
+      '[out:json][timeout:22];' +
+      '(' +
+      '  way["landuse"="industrial"](' + bb + ');' +
+      '  relation["landuse"="industrial"](' + bb + ');' +
+      '  way["landuse"="warehouse"](' + bb + ');' +
+      '  way["industrial"~"^(park|warehouse|factory|yes)$"](' + bb + ');' +
+      ')->.ind;' +
+      '(' +
+      '  way["highway"](area.ind);' +
+      '  way["highway"]["abutters"="industrial"](' + bb + ');' +
+      '  way["highway"]["zone:traffic"="industrial"](' + bb + ');' +
+      '  way["landuse"="industrial"](' + bb + ');' +
+      ');' +
+      'out geom;';
+    var data = await overpassJson(query);
+    var elements = (data && data.elements) || [];
+    var limit = maxFeatures || 500;
+    var segments = [];
+    var polygons = [];
+    var seen = {};
+
+    elements.forEach(function (el) {
+      if (!el || el.type !== 'way' || !el.geometry || el.geometry.length < 2) return;
+      var tags = el.tags || {};
+      var coords = el.geometry.map(function (g) { return [g.lon, g.lat]; });
+      var isArea = tags.landuse === 'industrial' || tags.landuse === 'warehouse' || !!tags.industrial;
+      var closed = coords.length >= 4 &&
+        coords[0][0] === coords[coords.length - 1][0] &&
+        coords[0][1] === coords[coords.length - 1][1];
+
+      if (isArea && closed) {
+        polygons.push([coords]);
+        var keyPoly = 'poly-' + el.id;
+        if (!seen[keyPoly] && segments.length < limit) {
+          seen[keyPoly] = 1;
+          segments.push({
+            source: 'INDUSTRIAL',
+            code: 'IND',
+            role: 'allowed',
+            label: 'Zone industrielle (camion permis)',
+            name: tags.name || 'Quartier industriel',
+            city: '',
+            geometry: { type: 'LineString', coordinates: coords },
+            properties: tags
+          });
+        }
+      }
+
+      if (tags.highway) {
+        var key = 'hw-' + el.id;
+        if (seen[key] || segments.length >= limit) return;
+        seen[key] = 1;
+        segments.push({
+          source: 'INDUSTRIAL',
+          code: 'IND',
+          role: 'allowed',
+          label: 'Zone industrielle (camion permis)',
+          name: tags.name || tags.ref || 'Accès industriel',
+          city: '',
+          geometry: { type: 'LineString', coordinates: coords },
+          properties: tags
+        });
+      }
+    });
+
+    return { segments: segments, polygons: polygons };
+  }
+
+  /** Recasse en vert les no-truck officiels situés dans un quartier industriel. */
+  function promoteIndustrialAccess(segments, polygons) {
+    if (!polygons || !polygons.length) return segments || [];
+    return (segments || []).map(function (seg) {
+      if (!seg || seg.role !== 'forbidden') return seg;
+      var g = seg.geometry;
+      if (!g) return seg;
+      var parts = g.type === 'MultiLineString' ? g.coordinates
+        : g.type === 'LineString' ? [g.coordinates] : null;
+      if (!parts) return seg;
+      var mid = midOfLine(parts);
+      if (!mid || !pointInIndustrialPolygons(mid.lat, mid.lon, polygons)) return seg;
+      return Object.assign({}, seg, {
+        role: 'allowed',
+        label: 'Zone industrielle (camion permis)',
+        code: 'IND',
+        source: (seg.source || '') + '+INDUSTRIAL'
+      });
+    });
+  }
+
   /**
    * Charge les couches pertinentes pour une bbox.
    * options.forbiddenOnly → priorise les no-truck rouges (plus rapide).
    * options.skipUS → ne charge pas le National Network US.
+   * options.skipIndustrial → saute Overpass industriel.
    */
   async function fetchNetworksForBbox(bbox, options) {
     var opts = options || {};
@@ -219,26 +368,44 @@
       tasks.push(fetchQuebecTruckNetwork(bbox, opts.maxFeatures || 700, { forbiddenOnly: !!opts.forbiddenOnly }));
       labels.push('CA-QC');
     }
-    // US seulement si pas clairement centré au QC, ou si bbox chevauche vraiment le sud
     if (likelyInUSA(bbox) && !opts.skipUS && !centeredInQuebec(bbox) && !opts.forbiddenOnly) {
       tasks.push(fetchUSNationalNetwork(bbox, 300));
       labels.push('US');
     }
+    // Zones industrielles CA/US/MX (vert = permis camion)
+    if (!opts.forbiddenOnly && !opts.skipIndustrial) {
+      tasks.push(fetchIndustrialTruckNetwork(bbox, opts.industrialMax || 500));
+      labels.push('INDUSTRIAL');
+    }
+
     var settled = await Promise.allSettled(tasks);
     var all = [];
     var sourcesUsed = [];
+    var industrialPolygons = [];
+
     settled.forEach(function (r, i) {
-      if (r.status === 'fulfilled') {
-        all = all.concat(r.value);
-        sourcesUsed.push(labels[i]);
+      if (r.status !== 'fulfilled') return;
+      var label = labels[i];
+      if (label === 'INDUSTRIAL') {
+        var pack = r.value || { segments: [], polygons: [] };
+        industrialPolygons = pack.polygons || [];
+        all = all.concat(pack.segments || []);
+        if ((pack.segments || []).length) sourcesUsed.push('INDUSTRIAL');
+      } else {
+        all = all.concat(r.value || []);
+        sourcesUsed.push(label);
       }
     });
+
+    all = promoteIndustrialAccess(all, industrialPolygons);
+
     return {
       all: all,
       allowed: all.filter(function (x) { return x.role === 'allowed'; }),
       forbidden: all.filter(function (x) { return x.role === 'forbidden'; }),
       caution: all.filter(function (x) { return x.role === 'caution'; }),
-      sourcesUsed: sourcesUsed
+      sourcesUsed: sourcesUsed,
+      industrialPolygons: industrialPolygons
     };
   }
 
@@ -318,6 +485,7 @@
     var minHits = options.minHits || 3;
     var matchM = options.matchM || 20;
     var ignoreNear = options.ignoreNearPoints || [];
+    var industrialPolygons = options.industrialPolygons || [];
     var samples = [];
     var route = routeCoords || [];
     var step = Math.max(1, Math.floor(route.length / 120));
@@ -329,12 +497,16 @@
       if (!f || f.role !== 'forbidden') return;
       var parts = featureLineParts(f.geometry);
       if (!parts.length) return;
+      var mid = midOfLine(parts);
+      // Quartier industriel = accès camion permis → ne pas traiter comme no-truck
+      if (mid && pointInIndustrialPolygons(mid.lat, mid.lon, industrialPolygons)) return;
       var dens = densifyLatLonLine(parts, 25);
       var hits = 0;
       var nearPts = [];
       for (var s = 0; s < samples.length; s++) {
         var pt = samples[s];
         if (nearAny(pt[0], pt[1], ignoreNear, softM)) continue;
+        if (pointInIndustrialPolygons(pt[0], pt[1], industrialPolygons)) continue;
         for (var d = 0; d < dens.length; d++) {
           if (haversineM(pt[0], pt[1], dens[d].lat, dens[d].lon) <= matchM) {
             hits += 1;
@@ -380,6 +552,7 @@
     var ignoreNear = opts.ignoreNearPoints || [];
     var densify = opts.densify != null ? !!opts.densify : !!(routeCoords && routeCoords.length);
     var halfDefault = opts.halfDeg || 0.0012;
+    var industrialPolygons = opts.industrialPolygons || [];
 
     var polys = (opts.existing || []).slice();
     var seen = {};
@@ -430,7 +603,8 @@
         softM: softM,
         ignoreNearPoints: ignoreNear,
         minHits: opts.minHits || 3,
-        matchM: opts.matchM || 20
+        matchM: opts.matchM || 20,
+        industrialPolygons: industrialPolygons
       });
       for (var fi = 0; fi < followed.length && polys.length < limit; fi++) {
         var seg = followed[fi];
@@ -531,9 +705,11 @@
     expandBbox: expandBbox,
     fetchQuebecTruckNetwork: fetchQuebecTruckNetwork,
     fetchUSNationalNetwork: fetchUSNationalNetwork,
+    fetchIndustrialTruckNetwork: fetchIndustrialTruckNetwork,
     fetchNetworksForBbox: fetchNetworksForBbox,
     buildExcludePolygons: buildExcludePolygons,
     findFollowedForbidden: findFollowedForbidden,
+    pointInIndustrialPolygons: pointInIndustrialPolygons,
     styleForRole: styleForRole,
     likelyInQuebec: likelyInQuebec,
     likelyInUSA: likelyInUSA,
