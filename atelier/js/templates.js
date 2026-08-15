@@ -352,11 +352,15 @@ const TEMPLATES = [
 
 const SECTION_CATALOG = [
   { type: "nav", label: "Barre de navigation" },
-  { type: "hero", label: "Bannière" },
+  { type: "hero", label: "Bannière (photo ou vidéo de fond)" },
+  { type: "video-bg", label: "Emplacement vidéo + texte par-dessus" },
+  { type: "stats", label: "Chiffres / confiance" },
+  { type: "carousel", label: "Carrousel (réalisations)" },
   { type: "services", label: "Services" },
   { type: "about", label: "À propos" },
-  { type: "video", label: "Vidéo" },
-  { type: "gallery", label: "Galerie" },
+  { type: "media", label: "Médias / vidéos (lecture)" },
+  { type: "video", label: "Vidéo encadrée" },
+  { type: "gallery", label: "Galerie photos" },
   { type: "cta", label: "Bandeau d'action" },
   { type: "contact", label: "Contact" },
   { type: "footer", label: "Pied de page" }
@@ -365,7 +369,17 @@ const SECTION_CATALOG = [
 function blankSection(type, brand) {
   const map = {
     nav: { brand: brand || "Marque", links: "Accueil,Services,Contact" },
-    hero: { kicker: "Accroche", title: "Titre principal", subtitle: "Une phrase claire sur l'offre.", cta: "Appel à l'action", image: "https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=1600&q=80" },
+    hero: { kicker: "Accroche", title: "Titre principal", subtitle: "Une phrase claire sur l'offre.", cta: "Appel à l'action", image: "https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=1600&q=80", video: "" },
+    "video-bg": { kicker: "Vidéo", title: "Titre sur la vidéo", subtitle: "Le texte reste lisible, la vidéo joue derrière.", cta: "En savoir plus", video: "https://videos.pexels.com/video-files/3571264/3571264-uhd_2560_1440_30fps.mp4" },
+    stats: { items: [{ value: "1993", label: "Depuis" }, { value: "100%", label: "Sur place" }, { value: "RBQ", label: "Licence" }] },
+    carousel: { title: "En vedette", cards: [
+      { kicker: "Projet", title: "Titre 1", text: "Courte description.", image: "https://images.unsplash.com/photo-1504307651254-35680f356dfd?auto=format&fit=crop&w=800&q=70" },
+      { kicker: "Projet", title: "Titre 2", text: "Courte description.", image: "https://images.unsplash.com/photo-1541888946425-d81bb19240f5?auto=format&fit=crop&w=800&q=70" },
+      { kicker: "Projet", title: "Titre 3", text: "Courte description.", image: "https://images.unsplash.com/photo-1581094794329-c8112a89af12?auto=format&fit=crop&w=800&q=70" }
+    ] },
+    media: { title: "Médias", items: [
+      { kicker: "Vidéo", title: "Titre", image: "https://images.unsplash.com/photo-1503387762-592deb58ef4e?auto=format&fit=crop&w=800&q=70", video: "https://www.youtube.com/watch?v=zyYgDtY2AMY" }
+    ] },
     services: { title: "Services", items: [{ title: "Service", text: "Description courte." }, { title: "Service", text: "Description courte." }, { title: "Service", text: "Description courte." }] },
     about: { title: "À propos", text: "Présentez l'entreprise.", image: "https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&w=1200&q=80" },
     video: { title: "Vidéo", url: "https://www.youtube.com/watch?v=zyYgDtY2AMY" },
