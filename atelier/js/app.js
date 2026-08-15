@@ -67,6 +67,28 @@
     return `<video controls playsinline src="${esc(raw)}"></video>`;
   }
 
+  function parseVideoBg(url) {
+    if (!url) return "";
+    const raw = String(url).trim();
+    let m = raw.match(/(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([\w-]{11})/);
+    if (m) {
+      const id = m[1];
+      return `<iframe class="bg-frame" src="https://www.youtube-nocookie.com/embed/${id}?autoplay=1&mute=1&controls=0&loop=1&playlist=${id}&playsinline=1&rel=0" allow="autoplay; encrypted-media" title=""></iframe>`;
+    }
+    m = raw.match(/vimeo\.com\/(?:video\/)?(\d+)/);
+    if (m) return `<iframe class="bg-frame" src="https://player.vimeo.com/video/${m[1]}?background=1&autoplay=1&loop=1&muted=1" allow="autoplay" title=""></iframe>`;
+    return `<video class="bg-video" autoplay muted loop playsinline src="${esc(raw)}"></video>`;
+  }
+
+  function heroCopy(sec, d, f) {
+    return `<div class="copy">
+      <div class="kicker">${f("kicker", d.kicker)}</div>
+      ${f("title", d.title, "h2")}
+      ${f("subtitle", d.subtitle, "p")}
+      <span class="s-btn">${f("cta", d.cta)}</span>
+    </div>`;
+  }
+
   function esc(s) {
     return String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   }
@@ -83,15 +105,59 @@
       return `<div class="s-nav">${f("brand", d.brand, "span")}<div class="links">${editable ? f("links", d.links, "span") : links}</div></div>`;
     }
     if (sec.type === "hero") {
-      return `<div class="s-hero" style="background-image:url('${esc(d.image || "")}')">
+      const bg = d.video
+        ? `<div class="hero-media">${parseVideoBg(d.video)}</div>`
+        : "";
+      const img = d.video ? "" : `style="background-image:url('${esc(d.image || "")}')"`;
+      return `<div class="s-hero ${d.video ? "has-video" : ""}" ${img}>
+        ${bg}
         <div class="shade"></div>
-        <div class="copy">
-          <div class="kicker">${f("kicker", d.kicker)}</div>
-          ${f("title", d.title, "h2")}
-          ${f("subtitle", d.subtitle, "p")}
-          <span class="s-btn">${f("cta", d.cta)}</span>
+        ${heroCopy(sec, d, f)}
+      </div>`;
+    }
+    if (sec.type === "video-bg") {
+      return `<div class="s-hero s-video-bg has-video">
+        <div class="hero-media">${parseVideoBg(d.video)}</div>
+        <div class="shade"></div>
+        ${heroCopy(sec, d, f)}
+      </div>`;
+    }
+    if (sec.type === "stats") {
+      const cells = (d.items || []).map((it, i) =>
+        `<div class="stat"><b>${f("items." + i + ".value", it.value)}</b><span>${f("items." + i + ".label", it.label)}</span></div>`
+      ).join("");
+      return `<div class="s-stats">${cells}</div>`;
+    }
+    if (sec.type === "carousel") {
+      const cards = (d.cards || []).map((c, i) => `
+        <article class="car-card">
+          <div class="car-img"><img src="${esc(c.image)}" alt=""></div>
+          <div class="car-body">
+            <div class="kicker">${f("cards." + i + ".kicker", c.kicker)}</div>
+            <h4>${f("cards." + i + ".title", c.title, "span")}</h4>
+            <p>${f("cards." + i + ".text", c.text)}</p>
+          </div>
+        </article>`).join("");
+      return `<div class="s-carousel pad">
+        ${f("title", d.title, "h3")}
+        <div class="car-row">
+          <button type="button" class="car-btn" data-car="-1">←</button>
+          <div class="car-track">${cards}</div>
+          <button type="button" class="car-btn" data-car="1">→</button>
         </div>
       </div>`;
+    }
+    if (sec.type === "media") {
+      const cards = (d.items || []).map((it, i) => `
+        <figure class="media-card" ${it.video ? `data-open-video="${esc(it.video)}"` : ""}>
+          <img src="${esc(it.image)}" alt="">
+          ${it.video ? `<span class="media-play">▶</span>` : ""}
+          <figcaption>
+            <div class="kicker">${f("items." + i + ".kicker", it.kicker)}</div>
+            <h4>${f("items." + i + ".title", it.title, "span")}</h4>
+          </figcaption>
+        </figure>`).join("");
+      return `<div class="s-media pad">${f("title", d.title, "h3")}<div class="media-grid">${cards}</div></div>`;
     }
     if (sec.type === "services") {
       const items = (d.items || []).map((it, i) => `
@@ -248,17 +314,41 @@
     }
     html += `<h4>Bloc</h4>`;
     const d = sec.data;
+    const labels = {
+      video: "URL vidéo de fond (YouTube, Vimeo ou MP4)",
+      image: "Image de couverture",
+      url: "URL vidéo",
+      kicker: "Petite ligne au-dessus",
+      title: "Titre",
+      subtitle: "Texte",
+      cta: "Bouton",
+      text: "Texte",
+      brand: "Nom",
+      links: "Liens (séparés par des virgules)",
+      address: "Adresse",
+      phone: "Téléphone",
+      email: "Courriel / note",
+      note: "Note",
+      button: "Bouton"
+    };
     Object.keys(d).forEach(k => {
-      if (k === "items") {
-        d.items.forEach((it, i) => {
-          html += `<label>Service ${i + 1} — titre</label><input data-d="items.${i}.title" value="${esc(it.title)}">`;
-          html += `<label>Service ${i + 1} — texte</label><textarea data-d="items.${i}.text">${esc(it.text)}</textarea>`;
+      if (k === "items" || k === "cards" || k === "stats") {
+        (d[k] || []).forEach((it, i) => {
+          Object.keys(it).forEach(ik => {
+            const lab = `${k === "cards" ? "Carte" : k === "stats" ? "Chiffre" : "Item"} ${i + 1} — ${ik}`;
+            const val = it[ik];
+            const area = String(val).length > 50 || ik === "text" || ik === "video";
+            html += `<label>${esc(lab)}</label>`;
+            html += area
+              ? `<textarea data-d="${k}.${i}.${ik}">${esc(val)}</textarea>`
+              : `<input data-d="${k}.${i}.${ik}" value="${esc(val)}">`;
+          });
         });
       } else if (k === "images") {
         html += `<label>Images (une URL par ligne)</label><textarea data-d="images">${esc(d.images.join("\n"))}</textarea>`;
       } else {
-        const area = String(d[k]).length > 60 || k === "text" || k === "url";
-        html += `<label>${k}</label>`;
+        const area = String(d[k]).length > 60 || k === "text" || k === "url" || k === "video";
+        html += `<label>${labels[k] || k}</label>`;
         html += area
           ? `<textarea data-d="${k}">${esc(d[k])}</textarea>`
           : `<input data-d="${k}" value="${esc(d[k])}">`;
@@ -387,6 +477,22 @@
       }
       if (e.target.id === "btn-desktop") { state.device = "desktop"; renderEditor(); }
       if (e.target.id === "btn-mobile") { state.device = "mobile"; renderEditor(); }
+      if (e.target.dataset.car) {
+        const track = e.target.parentElement.querySelector(".car-track");
+        if (track) track.scrollBy({ left: Number(e.target.dataset.car) * 280, behavior: "smooth" });
+      }
+      const openV = e.target.closest("[data-open-video]");
+      if (openV && !e.target.closest(".editable")) {
+        const box = $("#site-lightbox");
+        if (box) {
+          $("#site-lightbox-stage").innerHTML = parseVideo(openV.dataset.openVideo);
+          box.classList.add("on");
+        }
+      }
+      if (e.target.id === "site-lightbox" || e.target.closest("[data-close-light]")) {
+        const box = $("#site-lightbox");
+        if (box) { box.classList.remove("on"); $("#site-lightbox-stage").innerHTML = ""; }
+      }
       if (e.target.id === "btn-publish") {
         state.current.published = true;
         persistSite();
