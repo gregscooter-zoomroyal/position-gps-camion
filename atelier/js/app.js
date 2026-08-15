@@ -1,7 +1,10 @@
 (() => {
   const AUTH_KEY = "atelier-auth-v1";
-  const DATA_KEY = "atelier-sites-v1";
+  const DATA_KEY = "atelier-sites-v2";
+  const DATA_KEY_OLD = "atelier-sites-v1";
+  const APP_VERSION = "3";
   const SHARED_KEYS = ["cursor"];
+  const SERVER_LOCK = new Set(["site-pavage-go"]);
   const $ = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 
@@ -14,29 +17,58 @@
   };
 
   function loadSites() {
-    try { return JSON.parse(localStorage.getItem(DATA_KEY)) || []; }
-    catch { return []; }
+    try {
+      const fresh = JSON.parse(localStorage.getItem(DATA_KEY));
+      if (Array.isArray(fresh) && fresh.length) return fresh;
+    } catch { /* ignore */ }
+    try {
+      const old = JSON.parse(localStorage.getItem(DATA_KEY_OLD)) || [];
+      return old.filter(s => s && s.id && !SERVER_LOCK.has(s.id));
+    } catch { return []; }
   }
   function saveSites() {
     localStorage.setItem(DATA_KEY, JSON.stringify(state.sites));
   }
 
-  function mergeSites(base, extra) {
+  function mergeSites(local, shared, { forceLock = false } = {}) {
     const map = new Map();
-    (base || []).concat(extra || []).forEach(s => { if (s && s.id) map.set(s.id, s); });
+    (local || []).forEach(s => { if (s && s.id) map.set(s.id, s); });
+    (shared || []).forEach(s => {
+      if (!s || !s.id) return;
+      const prev = map.get(s.id);
+      const serverNewer = SERVER_LOCK.has(s.id) && Number(s.revision || 0) > Number((prev && prev.revision) || 0);
+      if (!prev || forceLock || serverNewer) {
+        map.set(s.id, { ...s, published: prev ? !!prev.published : !!s.published });
+      }
+    });
     return [...map.values()];
+  }
+
+  async function fetchSharedSites() {
+    const res = await fetch("data/sites.json?v=" + APP_VERSION, { cache: "reload" });
+    if (!res.ok) throw new Error("sites.json " + res.status);
+    const shared = await res.json();
+    if (!Array.isArray(shared)) throw new Error("sites.json invalide");
+    return shared;
   }
 
   async function loadSharedSites() {
     try {
-      const res = await fetch("data/sites.json", { cache: "no-store" });
-      if (!res.ok) return;
-      const shared = await res.json();
-      if (Array.isArray(shared) && shared.length) {
+      const shared = await fetchSharedSites();
+      if (shared.length) {
         state.sites = mergeSites(state.sites, shared);
         saveSites();
       }
     } catch { /* fichier absent */ }
+  }
+
+  async function reloadLockedFromServer() {
+    const shared = await fetchSharedSites();
+    state.sites = mergeSites(state.sites, shared, { forceLock: true });
+    saveSites();
+    if (state.current && SERVER_LOCK.has(state.current.id)) {
+      state.current = state.sites.find(s => s.id === state.current.id) || state.current;
+    }
   }
 
   async function sha(text) {
@@ -77,7 +109,7 @@
     }
     m = raw.match(/vimeo\.com\/(?:video\/)?(\d+)/);
     if (m) return `<iframe class="bg-frame" src="https://player.vimeo.com/video/${m[1]}?background=1&autoplay=1&loop=1&muted=1" allow="autoplay" title=""></iframe>`;
-    return `<video class="bg-video" autoplay muted loop playsinline src="${esc(raw)}"></video>`;
+    return `<video class="bg-video" autoplay muted loop playsinline preload="auto" src="${esc(raw)}"></video>`;
   }
 
   function heroCopy(sec, d, f) {
@@ -247,19 +279,26 @@
 
   function renderDash() {
     const grid = $("#site-grid");
-    const cards = state.sites.map(s => `
+    const ver = $("#app-ver");
+    if (ver) ver.textContent = "v" + APP_VERSION;
+    const cards = state.sites.map(s => {
+      const n = (s.pages && s.pages[0] && s.pages[0].sections) ? s.pages[0].sections.length : 0;
+      const locked = SERVER_LOCK.has(s.id);
+      return `
       <article class="card">
         <img src="${esc(s.cover)}" alt="">
+        ${locked ? `<div class="card-flag">v${APP_VERSION} · ${n} blocs · clique Éditer</div>` : ""}
         <div class="card-body">
           <h3>${esc(s.name)}</h3>
-          <p>${esc(s.client || "Client")} · ${s.published ? "publié" : "brouillon"}</p>
+          <p>${esc(s.client || "Client")} · ${s.published ? "publié" : "brouillon privé"}</p>
         </div>
         <div class="card-actions">
           <a class="btn btn-teal" href="#/edit/${s.id}">Éditer</a>
           ${s.published ? `<a class="btn btn-ghost" href="#/p/${s.slug}" target="_blank">Voir</a>` : ""}
           <button class="btn btn-danger" data-del="${s.id}">Supprimer</button>
         </div>
-      </article>`).join("");
+      </article>`;
+    }).join("");
     grid.innerHTML = `<button class="new-card" id="btn-new" type="button">+ Nouveau site client</button>` + cards;
     const tools = $("#dash-tools");
     if (tools) tools.style.display = "flex";
@@ -272,7 +311,7 @@
 
   function renderEditor() {
     const site = state.current;
-    $("#ed-name").textContent = site.name;
+    $("#ed-name").textContent = site.name + (SERVER_LOCK.has(site.id) ? " · v" + APP_VERSION : "");
     $("#sec-list").innerHTML = site.pages[0].sections.map(s => {
       const label = (SECTION_CATALOG.find(x => x.type === s.type) || {}).label || s.type;
       return `<div class="sec-item ${state.selected === s.id ? "on" : ""}" data-sel="${s.id}">
@@ -425,6 +464,21 @@
     });
 
     document.addEventListener("click", (e) => {
+      if (e.target.id === "btn-reload-server") {
+        e.target.disabled = true;
+        e.target.textContent = "Chargement…";
+        reloadLockedFromServer().then(() => {
+          alert("Pavage G.O. a été rechargé depuis le serveur. Ouvre Éditer.");
+          location.hash = "#/";
+          route();
+        }).catch(() => {
+          alert("Impossible de recharger. Réessaie dans un instant.");
+        }).finally(() => {
+          e.target.disabled = false;
+          e.target.textContent = "Recharger Pavage G.O. depuis le serveur";
+        });
+        return;
+      }
       if (e.target.id === "btn-new" || e.target.closest("#btn-new")) openCreate();
       if (e.target.id === "modal-new") e.target.classList.remove("on");
       const tpl = e.target.closest("[data-tpl]");

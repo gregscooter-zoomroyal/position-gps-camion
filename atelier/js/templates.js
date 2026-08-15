@@ -274,7 +274,15 @@ const TEMPLATES = [
               title: name,
               subtitle: "Pose, réparation et entretien d'asphalte. Une visite, un devis clair.",
               cta: "Demander une estimation",
-              image: "https://images.unsplash.com/photo-1503387762-592deb58ef4e?auto=format&fit=crop&w=1600&q=80"
+              image: "https://images.unsplash.com/photo-1503387762-592deb58ef4e?auto=format&fit=crop&w=1600&q=80",
+              video: "https://videos.pexels.com/video-files/3571264/3571264-hd_1920_1080_30fps.mp4"
+            }),
+            section("stats", {
+              items: [
+                { value: "1993", label: "Fondation" },
+                { value: "Sur place", label: "Devis" },
+                { value: "RBQ", label: "Licence" }
+              ]
             }),
             section("services", {
               title: "Services",
@@ -282,6 +290,14 @@ const TEMPLATES = [
                 { title: "Pose d'asphalte", text: "Entrée, stationnement, allée. Préparation et pose." },
                 { title: "Réparation", text: "Fissures, nids-de-poule, rapieçage, puisards." },
                 { title: "Entretien", text: "Scellant, colmatage, recouvrement." }
+              ]
+            }),
+            section("carousel", {
+              title: "Réalisations",
+              cards: [
+                { kicker: "Résidentiel", title: "Entrées", text: "Maisons et allées.", image: "https://images.unsplash.com/photo-1504307651254-35680f356dfd?auto=format&fit=crop&w=800&q=80" },
+                { kicker: "Commercial", title: "Stationnements", text: "Commerces et immeubles.", image: "https://images.unsplash.com/photo-1541888946425-d81bb19240f5?auto=format&fit=crop&w=800&q=80" },
+                { kicker: "Chantier", title: "Machinerie", text: "Paveuse et compactage.", image: "https://images.unsplash.com/photo-1503387762-592deb58ef4e?auto=format&fit=crop&w=800&q=80" }
               ]
             }),
             section("about", {
@@ -370,7 +386,7 @@ function blankSection(type, brand) {
   const map = {
     nav: { brand: brand || "Marque", links: "Accueil,Services,Contact" },
     hero: { kicker: "Accroche", title: "Titre principal", subtitle: "Une phrase claire sur l'offre.", cta: "Appel à l'action", image: "https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=1600&q=80", video: "" },
-    "video-bg": { kicker: "Vidéo", title: "Titre sur la vidéo", subtitle: "Le texte reste lisible, la vidéo joue derrière.", cta: "En savoir plus", video: "https://videos.pexels.com/video-files/3571264/3571264-uhd_2560_1440_30fps.mp4" },
+    "video-bg": { kicker: "Vidéo", title: "Titre sur la vidéo", subtitle: "Le texte reste lisible, la vidéo joue derrière.", cta: "En savoir plus", video: "https://videos.pexels.com/video-files/3571264/3571264-hd_1920_1080_30fps.mp4" },
     stats: { items: [{ value: "1993", label: "Depuis" }, { value: "100%", label: "Sur place" }, { value: "RBQ", label: "Licence" }] },
     carousel: { title: "En vedette", cards: [
       { kicker: "Projet", title: "Titre 1", text: "Courte description.", image: "https://images.unsplash.com/photo-1504307651254-35680f356dfd?auto=format&fit=crop&w=800&q=70" },
