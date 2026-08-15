@@ -2,7 +2,7 @@
   const AUTH_KEY = "atelier-auth-v1";
   const DATA_KEY = "atelier-sites-v2";
   const DATA_KEY_OLD = "atelier-sites-v1";
-  const APP_VERSION = "4";
+  const APP_VERSION = "5";
   const SHARED_KEYS = ["cursor"];
   const SERVER_LOCK = new Set(["site-pavage-go"]);
   const $ = (s, r = document) => r.querySelector(s);
@@ -140,8 +140,8 @@
       const bg = d.video
         ? `<div class="hero-media">${parseVideoBg(d.video)}</div>`
         : "";
-      const img = d.video ? "" : `style="background-image:url('${esc(d.image || "")}')"`;
-      return `<div class="s-hero ${d.video ? "has-video" : ""}" ${img}>
+      const img = d.video ? "" : (d.image ? `style="background-image:url('${esc(d.image)}')"` : "");
+      return `<div class="s-hero ${d.video ? "has-video" : ""} ${!d.video && !d.image ? "on-canvas" : ""}" ${img}>
         ${bg}
         <div class="shade"></div>
         ${heroCopy(sec, d, f)}
@@ -227,19 +227,25 @@
   }
 
   function applyTheme(root, theme) {
+    const img = theme.bgImage ? `url("${theme.bgImage}")` : "none";
     root.style.setProperty("--site-primary", theme.primary);
     root.style.setProperty("--site-accent", theme.accent);
+    root.style.setProperty("--site-bg-image", img);
     root.style.color = theme.text;
-    root.style.background = theme.bg;
     root.style.fontFamily = theme.font + ", DM Sans, sans-serif";
     if (theme.bgImage) {
-      root.style.backgroundImage = `url('${theme.bgImage}')`;
-      root.style.backgroundSize = "cover";
-      root.style.backgroundPosition = "center";
+      root.style.background = "";
+      root.style.backgroundImage = "";
       root.classList.add("has-asphalt");
     } else {
+      root.style.background = theme.bg;
       root.style.backgroundImage = "";
       root.classList.remove("has-asphalt");
+    }
+    const wrap = root.id === "canvas" ? $("#canvas-wrap") : null;
+    if (wrap) {
+      wrap.classList.toggle("has-asphalt", !!theme.bgImage);
+      wrap.style.setProperty("--site-bg-image", img);
     }
   }
 

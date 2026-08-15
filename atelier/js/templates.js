@@ -261,7 +261,7 @@ const TEMPLATES = [
     blurb: "Pose, réparation, devis sur place.",
     cover: "assets/asphalte.jpg",
     build(name) {
-      const t = baseTheme({ primary: "#0b0c0e", accent: "#e8a317", text: "#111827", bg: "#1a1a1c" });
+      const t = baseTheme({ primary: "#0b0c0e", accent: "#e8a317", text: "#111827", bg: "#737375" });
       t.bgImage = "assets/asphalte.jpg";
       return {
         theme: t,
@@ -275,7 +275,7 @@ const TEMPLATES = [
               title: name,
               subtitle: "Pose, réparation et entretien d'asphalte. Une visite, un devis clair.",
               cta: "Demander une estimation",
-              image: "assets/asphalte.jpg",
+              image: "",
               video: ""
             }),
             section("stats", {
