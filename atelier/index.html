@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Atelier · Crée des sites pour tes clients</title>
+  <meta name="robots" content="noindex">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <div class="screen" id="screen-gate">
+    <div class="gate">
+      <div class="gate-card">
+        <div class="mark">A</div>
+        <h1 id="gate-title">Atelier</h1>
+        <p id="gate-copy">Espace privé pour créer des sites d'entreprises.</p>
+        <form id="gate-form">
+          <label>Mot de passe</label>
+          <input id="gate-pass" type="password" autocomplete="current-password" required>
+          <div class="err" id="gate-err"></div>
+          <button class="btn btn-teal btn-wide" id="gate-btn" type="submit">Entrer</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="screen-app" id="screen-dash">
+    <header class="topbar">
+      <div class="brand"><span class="mark">A</span> Atelier</div>
+      <div class="top-actions">
+        <button class="btn btn-ghost" id="btn-logout" type="button">Quitter</button>
+      </div>
+    </header>
+    <div class="dash">
+      <div class="dash-head">
+        <div>
+          <h2>Tes sites</h2>
+          <p>Un site par client. Modèle, textes, photos, vidéo — tout se change dans l'éditeur.</p>
+        </div>
+      </div>
+      <div class="cards" id="site-grid"></div>
+    </div>
+  </div>
+
+  <div class="screen-app" id="screen-editor">
+    <header class="topbar">
+      <div class="brand"><a href="#/"><span class="mark">A</span> Atelier</a></div>
+      <div class="site-name" id="ed-name"></div>
+      <div class="top-actions">
+        <button class="btn btn-ghost" id="btn-desktop" type="button">Ordi</button>
+        <button class="btn btn-ghost" id="btn-mobile" type="button">Tél.</button>
+        <button class="btn btn-teal" id="btn-publish" type="button">Publier</button>
+      </div>
+    </header>
+    <div class="editor">
+      <aside class="side">
+        <h4>Blocs</h4>
+        <div id="sec-list"></div>
+        <button class="btn btn-ghost btn-wide" id="add-sec-btn" type="button" style="margin-top:12px">+ Ajouter un bloc</button>
+      </aside>
+      <div class="workspace">
+        <div class="canvas-wrap" id="canvas-wrap">
+          <div class="canvas" id="canvas"></div>
+        </div>
+      </div>
+      <aside class="inspect">
+        <div id="inspect-body"></div>
+      </aside>
+    </div>
+  </div>
+
+  <div class="screen" id="screen-pub">
+    <div class="pub" id="pub-root"></div>
+  </div>
+
+  <div class="modal" id="modal-new">
+    <div class="modal-card">
+      <h2 style="margin:0 0 8px">Nouveau site client</h2>
+      <p style="color:var(--muted);margin:0">Choisis un modèle, puis tu modifies tout.</p>
+      <label>Nom du site / entreprise</label>
+      <input id="new-name" placeholder="Ex. Chez Léon">
+      <label>Nom du client</label>
+      <input id="new-client" placeholder="Ex. Léon Tremblay">
+      <div class="tpl-grid" id="tpl-grid"></div>
+      <button class="btn btn-teal btn-wide" id="create-site" type="button">Créer le site</button>
+    </div>
+  </div>
+
+  <div class="modal" id="modal-sec">
+    <div class="modal-card">
+      <h2 style="margin:0 0 8px">Ajouter un bloc</h2>
+      <div id="sec-types"></div>
+    </div>
+  </div>
+
+  <script src="js/templates.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
