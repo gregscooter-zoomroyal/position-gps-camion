@@ -259,9 +259,10 @@ const TEMPLATES = [
     id: "pavage",
     name: "Pavage / asphalte",
     blurb: "Pose, réparation, devis sur place.",
-    cover: "https://images.unsplash.com/photo-1503387762-592deb58ef4e?auto=format&fit=crop&w=800&q=70",
+    cover: "assets/asphalte.jpg",
     build(name) {
-      const t = baseTheme({ primary: "#0b0c0e", accent: "#e8a317", text: "#111827" });
+      const t = baseTheme({ primary: "#0b0c0e", accent: "#e8a317", text: "#111827", bg: "#1a1a1c" });
+      t.bgImage = "assets/asphalte.jpg";
       return {
         theme: t,
         pages: [{
@@ -274,8 +275,8 @@ const TEMPLATES = [
               title: name,
               subtitle: "Pose, réparation et entretien d'asphalte. Une visite, un devis clair.",
               cta: "Demander une estimation",
-              image: "https://images.unsplash.com/photo-1503387762-592deb58ef4e?auto=format&fit=crop&w=1600&q=80",
-              video: "https://videos.pexels.com/video-files/3571264/3571264-hd_1920_1080_30fps.mp4"
+              image: "assets/asphalte.jpg",
+              video: ""
             }),
             section("stats", {
               items: [

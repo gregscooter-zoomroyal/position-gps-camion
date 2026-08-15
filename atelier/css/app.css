@@ -215,6 +215,33 @@ input, textarea, select {
 }
 .canvas-wrap.mobile { max-width: 390px; }
 .canvas { min-height: 100%; }
+.canvas.has-asphalt, .pub.has-asphalt {
+  background-color: #1a1a1c;
+  background-repeat: no-repeat;
+}
+.canvas.has-asphalt .s-nav, .pub.has-asphalt .s-nav {
+  color: #fff;
+  background: rgba(12, 12, 14, .55);
+  backdrop-filter: blur(4px);
+}
+.canvas.has-asphalt .s-nav .links, .pub.has-asphalt .s-nav .links { opacity: .9; }
+.canvas.has-asphalt .s-stats,
+.canvas.has-asphalt .s-services,
+.canvas.has-asphalt .s-about,
+.canvas.has-asphalt .s-carousel,
+.canvas.has-asphalt .s-media,
+.canvas.has-asphalt .s-contact,
+.pub.has-asphalt .s-stats,
+.pub.has-asphalt .s-services,
+.pub.has-asphalt .s-about,
+.pub.has-asphalt .s-carousel,
+.pub.has-asphalt .s-media,
+.pub.has-asphalt .s-contact {
+  background: rgba(248, 248, 246, .94);
+}
+.canvas.has-asphalt .s-hero .shade, .pub.has-asphalt .s-hero .shade {
+  background: linear-gradient(180deg, rgba(0,0,0,.15), rgba(0,0,0,.78));
+}
 
 /* published site canvas (also editor) */
 .s-nav, .s-hero, .s-services, .s-about, .s-video, .s-gallery, .s-cta, .s-contact, .s-footer, .s-carousel, .s-media, .s-stats, .s-video-bg {
