@@ -5,13 +5,13 @@
     "name": "Pavage G.O.",
     "client": "PAVAGE G.O. 9145-7697 QUÉBEC INC.",
     "cover": "assets/asphalte.jpg",
-    "revision": 4,
+    "revision": 5,
     "updated": "2026-08-15",
     "published": false,
     "theme": {
       "primary": "#0b0c0e",
       "accent": "#e8a317",
-      "bg": "#1a1a1c",
+      "bg": "#737375",
       "text": "#111827",
       "muted": "#6b7280",
       "font": "DM Sans",
@@ -38,7 +38,7 @@
               "title": "L'asphalte, bien fait.",
               "subtitle": "Pose, réparation et entretien d'entrées et de stationnements. Une visite sur place, un devis clair, un chantier propre.",
               "cta": "Estimation gratuite · 450 378-2117",
-              "image": "assets/asphalte.jpg",
+              "image": "",
               "video": ""
             }
           },
