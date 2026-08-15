@@ -2,7 +2,7 @@
  * Service worker Position · GPS Camion
  * Cache-first pour les assets statiques, network-first pour les navigations.
  */
-var CACHE_NAME = 'position-gps-v16';
+var CACHE_NAME = 'position-gps-v17';
 
 var STATIC_ASSETS = [
   './',
@@ -70,6 +70,9 @@ self.addEventListener('fetch', function (event) {
   } catch (e) {
     return;
   }
+
+  // Atelier ne doit jamais être servi depuis le cache GPS
+  if (/\/atelier(\/|$|\.html$)/.test(url.pathname)) return;
 
   // Network-first pour les navigations HTML
   if (isNavigationRequest(request)) {

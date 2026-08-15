@@ -5,6 +5,8 @@
     "name": "Pavage G.O.",
     "client": "PAVAGE G.O. 9145-7697 QUÉBEC INC.",
     "cover": "https://images.unsplash.com/photo-1503387762-592deb58ef4e?auto=format&fit=crop&w=800&q=70",
+    "revision": 3,
+    "updated": "2026-08-15",
     "published": false,
     "theme": {
       "primary": "#0b0c0e",
@@ -36,7 +38,7 @@
               "subtitle": "Pose, réparation et entretien d'entrées et de stationnements. Une visite sur place, un devis clair, un chantier propre.",
               "cta": "Estimation gratuite · 450 378-2117",
               "image": "https://images.unsplash.com/photo-1503387762-592deb58ef4e?auto=format&fit=crop&w=1600&q=80",
-              "video": ""
+              "video": "https://videos.pexels.com/video-files/3571264/3571264-hd_1920_1080_30fps.mp4"
             }
           },
           {
