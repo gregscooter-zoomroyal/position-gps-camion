@@ -2,7 +2,7 @@
   const AUTH_KEY = "atelier-auth-v1";
   const DATA_KEY = "atelier-sites-v2";
   const DATA_KEY_OLD = "atelier-sites-v1";
-  const APP_VERSION = "3";
+  const APP_VERSION = "4";
   const SHARED_KEYS = ["cursor"];
   const SERVER_LOCK = new Set(["site-pavage-go"]);
   const $ = (s, r = document) => r.querySelector(s);
@@ -232,6 +232,15 @@
     root.style.color = theme.text;
     root.style.background = theme.bg;
     root.style.fontFamily = theme.font + ", DM Sans, sans-serif";
+    if (theme.bgImage) {
+      root.style.backgroundImage = `url('${theme.bgImage}')`;
+      root.style.backgroundSize = "cover";
+      root.style.backgroundPosition = "center";
+      root.classList.add("has-asphalt");
+    } else {
+      root.style.backgroundImage = "";
+      root.classList.remove("has-asphalt");
+    }
   }
 
   function renderSite(site, { editable = false } = {}) {
