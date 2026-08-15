@@ -72,7 +72,7 @@ self.addEventListener('fetch', function (event) {
   }
 
   // Atelier ne doit jamais être servi depuis le cache GPS
-  if (/\/atelier(\/|$)/.test(url.pathname)) return;
+  if (/\/atelier(\/|$|\.html$)/.test(url.pathname)) return;
 
   // Network-first pour les navigations HTML
   if (isNavigationRequest(request)) {
