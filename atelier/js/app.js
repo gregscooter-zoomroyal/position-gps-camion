@@ -44,7 +44,7 @@
   }
 
   function field(sec, path, text, tag = "span") {
-    return `<${tag} class="editable" data-sec="${sec.id}" data-path="${path}">${esc(text)}</${tag}>`;
+    return `<${tag} class="editable" contenteditable="true" data-sec="${sec.id}" data-path="${path}">${esc(text)}</${tag}>`;
   }
 
   function renderSection(sec, editable) {
