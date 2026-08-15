@@ -1,5 +1,7 @@
-# Pavage G.O.
+# Pavage G.O. — aperçu privé
 
-Nouveau site web de l’entreprise (Granby / Roxton Pond). Indépendant du GPS.
+Nouveau site, **pas encore public**. Accès Gregory + Cursor seulement.
 
-En ligne après déploiement : `/pavage-go/`
+Mot de passe : `cursor`
+
+Ne pas fusionner dans `master` tant que le client n’a pas validé.

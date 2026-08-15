@@ -3,14 +3,28 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Pavage G.O. · Asphalte à Granby et en Montérégie</title>
+  <title>Pavage G.O. · Aperçu privé</title>
+  <meta name="robots" content="noindex, nofollow">
   <meta name="description" content="Entreprise familiale depuis 1993. Pose, réparation et entretien d'asphalte — résidentiel, commercial et industriel. Estimation gratuite. Granby / Roxton Pond.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Oswald:wght@500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/site.css">
 </head>
 <body>
-  <div class="top">
+  <div id="gate" class="gate">
+    <div class="gate-card">
+      <div class="kicker">Aperçu privé</div>
+      <h2>Pavage G.O.</h2>
+      <p>Seulement Gregory et Cursor. Pas encore en ligne pour le public.</p>
+      <form id="gate-form">
+        <label>Mot de passe</label>
+        <input id="gate-pass" type="password" autocomplete="current-password" required>
+        <div class="err" id="gate-err"></div>
+        <button class="btn btn-gold" type="submit" style="margin-top:14px;width:100%">Entrer</button>
+      </form>
+    </div>
+  </div>
+  <div id="site" hidden>
     <div class="wrap">
       <span>Granby · Roxton Pond · Montérégie · Estrie</span>
       <span>Estimation gratuite · <a href="tel:+14503782117">450 378-2117</a></span>
@@ -184,6 +198,7 @@
       <span>APCHQ · Estimation gratuite</span>
     </div>
   </footer>
+  </div>
 
   <script src="js/site.js"></script>
 </body>

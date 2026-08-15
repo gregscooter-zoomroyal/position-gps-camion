@@ -145,6 +145,24 @@ textarea { min-height: 110px; resize: vertical; }
 footer { border-top: 1px solid var(--line); padding: 28px 0; color: var(--muted); font-size: 13px; }
 .foot { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 
+.gate {
+  position: fixed; inset: 0; z-index: 80;
+  display: grid; place-items: center;
+  background: var(--ink);
+  padding: 24px;
+}
+.gate.off { display: none; }
+.gate-card {
+  width: min(400px, 100%);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  padding: 28px;
+}
+.gate-card h2 { margin: 8px 0 10px; font-size: 36px; }
+.gate-card p { color: var(--muted); }
+.gate-card label { display: block; margin: 14px 0 6px; }
+.err { color: #fca5a5; font-size: 13px; min-height: 1.1em; margin-top: 8px; }
+
 @media (max-width: 900px) {
   .links { display: none; }
   .links.open {
