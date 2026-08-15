@@ -256,6 +256,53 @@ const TEMPLATES = [
     }
   },
   {
+    id: "pavage",
+    name: "Pavage / asphalte",
+    blurb: "Pose, réparation, devis sur place.",
+    cover: "https://images.unsplash.com/photo-1503387762-592deb58ef4e?auto=format&fit=crop&w=800&q=70",
+    build(name) {
+      const t = baseTheme({ primary: "#0b0c0e", accent: "#e8a317", text: "#111827" });
+      return {
+        theme: t,
+        pages: [{
+          id: "home",
+          name: "Accueil",
+          sections: [
+            section("nav", { brand: name, links: "Services,Entreprise,Contact" }),
+            section("hero", {
+              kicker: "Depuis 1993",
+              title: name,
+              subtitle: "Pose, réparation et entretien d'asphalte. Une visite, un devis clair.",
+              cta: "Demander une estimation",
+              image: "https://images.unsplash.com/photo-1503387762-592deb58ef4e?auto=format&fit=crop&w=1600&q=80"
+            }),
+            section("services", {
+              title: "Services",
+              items: [
+                { title: "Pose d'asphalte", text: "Entrée, stationnement, allée. Préparation et pose." },
+                { title: "Réparation", text: "Fissures, nids-de-poule, rapieçage, puisards." },
+                { title: "Entretien", text: "Scellant, colmatage, recouvrement." }
+              ]
+            }),
+            section("about", {
+              title: "L'entreprise",
+              text: "Entreprise familiale. Estimation gratuite sur place.",
+              image: "https://images.unsplash.com/photo-1581092160562-40aa08e78837?auto=format&fit=crop&w=1200&q=80"
+            }),
+            section("cta", { title: "Estimation gratuite", button: "Nous appeler" }),
+            section("contact", {
+              title: "Contact",
+              address: "Ville, Québec",
+              phone: "000 000-0000",
+              email: "info@exemple.com"
+            }),
+            section("footer", { brand: name, note: "Estimation gratuite." })
+          ]
+        }]
+      };
+    }
+  },
+  {
     id: "generic",
     name: "Entreprise",
     blurb: "Base sobre pour n'importe quel client.",

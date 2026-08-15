@@ -33,7 +33,7 @@
       if (!res.ok) return;
       const shared = await res.json();
       if (Array.isArray(shared) && shared.length) {
-        state.sites = mergeSites(shared, state.sites);
+        state.sites = mergeSites(state.sites, shared);
         saveSites();
       }
     } catch { /* fichier absent */ }
