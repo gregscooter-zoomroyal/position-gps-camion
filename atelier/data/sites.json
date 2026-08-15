@@ -1,1 +1,113 @@
-[]
+[
+  {
+    "id": "site-pavage-go",
+    "slug": "pavage-go",
+    "name": "Pavage G.O.",
+    "client": "Pavage G.O. — Granby / Roxton Pond",
+    "cover": "https://images.unsplash.com/photo-1503387762-592deb58ef4e?auto=format&fit=crop&w=800&q=70",
+    "published": false,
+    "theme": {
+      "primary": "#0b0c0e",
+      "accent": "#e8a317",
+      "bg": "#ffffff",
+      "text": "#111827",
+      "muted": "#6b7280",
+      "font": "DM Sans"
+    },
+    "pages": [
+      {
+        "id": "home",
+        "name": "Accueil",
+        "sections": [
+          {
+            "id": "sec-nav",
+            "type": "nav",
+            "data": {
+              "brand": "Pavage G.O.",
+              "links": "Services,Entreprise,Contact"
+            }
+          },
+          {
+            "id": "sec-hero",
+            "type": "hero",
+            "data": {
+              "kicker": "Depuis 1993 · Entreprise familiale",
+              "title": "L'asphalte, bien fait.",
+              "subtitle": "Pose, réparation et entretien d'entrées et de stationnements. Une visite sur place, un devis clair, un chantier propre.",
+              "cta": "Demander une estimation",
+              "image": "https://images.unsplash.com/photo-1503387762-592deb58ef4e?auto=format&fit=crop&w=1600&q=80"
+            }
+          },
+          {
+            "id": "sec-services",
+            "type": "services",
+            "data": {
+              "title": "Tous les travaux d'asphalte",
+              "items": [
+                {
+                  "title": "Pose d'asphalte",
+                  "text": "Entrée, stationnement, allée. Préparation du sol, nivellement, pose 2 à 3 pouces — deux couches en commercial."
+                },
+                {
+                  "title": "Réparation",
+                  "text": "Nids-de-poule, fissures, resurfaçage, rapieçage et réparation de puisards."
+                },
+                {
+                  "title": "Entretien",
+                  "text": "Recouvrement, colmatage et scellant. Moins cher qu'une reprise complète."
+                }
+              ]
+            }
+          },
+          {
+            "id": "sec-about",
+            "type": "about",
+            "data": {
+              "title": "Une affaire de famille, depuis 1993",
+              "text": "Guy Ouellet et France Dextradeur fondent Pavage G.O. à Granby. Les fils ont repris le flambeau. Niveleuse Mauldin, paveuse 16 pieds, rouleau Bomag. Membre APCHQ. Chaque projet est estimé sur place.",
+              "image": "https://images.unsplash.com/photo-1581092160562-40aa08e78837?auto=format&fit=crop&w=1200&q=80"
+            }
+          },
+          {
+            "id": "sec-gallery",
+            "type": "gallery",
+            "data": {
+              "title": "Réalisations",
+              "images": [
+                "https://images.unsplash.com/photo-1504307651254-35680f356dfd?auto=format&fit=crop&w=800&q=80",
+                "https://images.unsplash.com/photo-1541888946425-d81bb19240f5?auto=format&fit=crop&w=800&q=80",
+                "https://images.unsplash.com/photo-1581094794329-c8112a89af12?auto=format&fit=crop&w=800&q=80"
+              ]
+            }
+          },
+          {
+            "id": "sec-cta",
+            "type": "cta",
+            "data": {
+              "title": "Estimation gratuite sur place",
+              "button": "450 378-2117"
+            }
+          },
+          {
+            "id": "sec-contact",
+            "type": "contact",
+            "data": {
+              "title": "Contact",
+              "address": "83, route 139, Roxton Pond (Québec) J0E 1Z0 — Granby, Bromont, Waterloo, Estrie",
+              "phone": "450 378-2117",
+              "email": "Demande de devis par téléphone"
+            }
+          },
+          {
+            "id": "sec-footer",
+            "type": "footer",
+            "data": {
+              "brand": "Pavage G.O.",
+              "note": "APCHQ · Brouillon — pas encore public"
+            }
+          }
+        ]
+      }
+    ]
+  }
+]
