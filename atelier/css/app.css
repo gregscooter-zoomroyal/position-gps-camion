@@ -269,7 +269,7 @@ input, textarea, select {
 }
 .canvas.has-asphalt .s-hero.on-canvas .shade,
 .pub.has-asphalt .s-hero.on-canvas .shade {
-  background: linear-gradient(180deg, rgba(30,30,32,.08), rgba(20,20,22,.5));
+  background: linear-gradient(180deg, rgba(30,30,32,.04), rgba(20,20,22,.38));
 }
 .canvas.has-asphalt .s-stats,
 .pub.has-asphalt .s-stats {
@@ -323,7 +323,7 @@ input, textarea, select {
   gap: 16px;
 }
 .s-nav .brand-wrap { display: flex; align-items: center; gap: 10px; }
-.s-nav .brand-wrap img { height: 40px; width: 40px; object-fit: cover; border-radius: 50%; }
+.s-nav .brand-wrap img { height: 44px; width: 44px; object-fit: contain; border-radius: 50%; background: transparent; }
 .s-nav .links a { text-decoration: none; opacity: .85; }
 .s-nav .links a:hover { opacity: 1; }
 .s-nav .links { display: flex; gap: 16px; font-weight: 500; font-size: 14px; opacity: .75; }
@@ -356,13 +356,13 @@ input, textarea, select {
 .s-hero .hero-mark {
   position: absolute;
   left: 50%;
-  top: 44%;
+  top: 46%;
   transform: translate(-50%, -50%);
-  width: min(300px, 58%);
+  width: min(440px, 82%);
   height: auto;
   z-index: 1;
   pointer-events: none;
-  opacity: .9;
+  opacity: 1;
 }
 .s-hero .shade { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,.2), rgba(0,0,0,.72)); z-index: 2; }
 .s-hero .copy { position: relative; z-index: 3; max-width: 640px; text-shadow: 0 2px 14px rgba(0,0,0,.55); }
