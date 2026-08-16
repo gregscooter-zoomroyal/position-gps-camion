@@ -213,7 +213,7 @@
   }
 
   function parseVideo(url) {
-    if (!url) return `<div class="video-empty">Clique pour choisir une vidéo</div>`;
+    if (!url) return `<div class="video-empty">Clique ici<br><small>Choisis le MP4 sur ton ordinateur</small></div>`;
     const raw = String(url).trim();
     let m = raw.match(/(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([\w-]{11})/);
     if (m) return `<iframe src="https://www.youtube-nocookie.com/embed/${m[1]}" allowfullscreen allow="encrypted-media"></iframe>`;
@@ -335,9 +335,10 @@
     }
     if (sec.type === "media") {
       const cards = (d.items || []).map((it, i) => {
+        const uploadAttr = editable ? ` data-upload="${sec.id}:${i}"` : "";
         if (editable && !it.video) {
-          return `<figure class="media-card media-drop" data-upload="${sec.id}:${i}">
-            <div class="media-drop-label">Clique pour choisir une vidéo</div>
+          return `<figure class="media-card media-drop"${uploadAttr}>
+            <div class="media-drop-label">Clique ici ou glisse le MP4<br><small>Fichier sur ton ordinateur — Bureau</small></div>
             <figcaption>
               <div class="kicker">${f("items." + i + ".kicker", it.kicker)}</div>
               <h4>${f("items." + i + ".title", it.title, "span")}</h4>
@@ -350,7 +351,7 @@
           : (it.video
             ? parseVideo(it.video)
             : `<img src="${esc(it.image)}" alt="">`);
-        return `<figure class="media-card media-loop">
+        return `<figure class="media-card media-loop"${uploadAttr}>
           ${thumb}
           <figcaption>
             <div class="kicker">${f("items." + i + ".kicker", it.kicker)}</div>
@@ -372,10 +373,12 @@
       </div></div>`;
     }
     if (sec.type === "video") {
-      const empty = editable && !d.url
-        ? `<div class="video-box video-drop" data-upload-url="${sec.id}"><div class="media-drop-label">Clique pour choisir une vidéo</div></div>`
+      const box = editable
+        ? (d.url
+          ? `<div class="video-box video-drop video-has" data-upload-url="${sec.id}">${parseVideo(d.url)}</div>`
+          : `<div class="video-box video-drop" data-upload-url="${sec.id}"><div class="media-drop-label">Clique ici ou glisse le MP4<br><small>Fichier sur ton ordinateur — Bureau</small></div></div>`)
         : `<div class="video-box">${parseVideo(d.url)}</div>`;
-      return `<div class="s-video pad">${f("title", d.title, "h3")}${empty}</div>`;
+      return `<div class="s-video pad">${f("title", d.title, "h3")}${box}</div>`;
     }
     if (sec.type === "gallery") {
       const imgs = (d.images || []).map(src => `<img src="${esc(src)}" alt="">`).join("");
@@ -703,7 +706,7 @@
               ? `<textarea data-d="${k}.${i}.${ik}">${esc(val)}</textarea>`
               : `<input data-d="${k}.${i}.${ik}" value="${esc(val)}">`;
             if (ik === "video" || ik === "image") {
-              html += `<button class="btn btn-ghost btn-wide" type="button" data-pick="${k}.${i}.${ik}">Choisir un fichier</button>`;
+              html += `<button class="btn btn-ghost btn-wide" type="button" data-pick="${k}.${i}.${ik}">Choisir un fichier sur cet ordinateur</button>`;
             }
           });
         });
@@ -716,7 +719,7 @@
           ? `<textarea data-d="${k}">${esc(d[k])}</textarea>`
           : `<input data-d="${k}" value="${esc(d[k])}">`;
         if (k === "video" || k === "url" || k === "image" || k === "logo") {
-          html += `<button class="btn btn-ghost btn-wide" type="button" data-pick="${k}">Choisir un fichier</button>`;
+          html += `<button class="btn btn-ghost btn-wide" type="button" data-pick="${k}">Choisir un fichier sur cet ordinateur</button>`;
         }
       }
     });
@@ -846,12 +849,10 @@
       }
       if (e.target.id === "btn-new" || e.target.closest("#btn-new")) openCreate();
       const upCard = e.target.closest("[data-upload]");
-      if (upCard && $("#screen-editor") && $("#screen-editor").classList.contains("on") && !e.target.closest("[data-open-video] .media-play")) {
-        if (!upCard.dataset.openVideo) {
-          const parts = upCard.dataset.upload.split(":");
-          startPick({ media: [parts[0], Number(parts[1])] });
-          return;
-        }
+      if (upCard && $("#screen-editor") && $("#screen-editor").classList.contains("on") && !e.target.closest(".editable")) {
+        const parts = upCard.dataset.upload.split(":");
+        startPick({ media: [parts[0], Number(parts[1])] });
+        return;
       }
       const upUrl = e.target.closest("[data-upload-url]");
       if (upUrl) {
@@ -1054,6 +1055,30 @@
       const file = e.target.files && e.target.files[0];
       e.target.value = "";
       if (!file) return;
+      try { await takeFile(file); }
+      catch { alert("Impossible d'importer ce fichier."); }
+    });
+    document.addEventListener("dragover", (e) => {
+      if (!$("#screen-editor") || !$("#screen-editor").classList.contains("on")) return;
+      if (e.target.closest("[data-upload],[data-upload-url]")) {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "copy";
+      }
+    });
+    document.addEventListener("drop", async (e) => {
+      if (!$("#screen-editor") || !$("#screen-editor").classList.contains("on")) return;
+      const card = e.target.closest("[data-upload]");
+      const urlBox = e.target.closest("[data-upload-url]");
+      if (!card && !urlBox) return;
+      e.preventDefault();
+      const file = e.dataTransfer.files && e.dataTransfer.files[0];
+      if (!file) return;
+      if (card) {
+        const parts = card.dataset.upload.split(":");
+        uploadTarget = { media: [parts[0], Number(parts[1])] };
+      } else {
+        uploadTarget = { url: urlBox.dataset.uploadUrl };
+      }
       try { await takeFile(file); }
       catch { alert("Impossible d'importer ce fichier."); }
     });

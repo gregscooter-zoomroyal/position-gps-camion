@@ -435,6 +435,17 @@ input, textarea, select {
   font-weight: 700;
   text-align: center;
   padding: 16px;
+  line-height: 1.35;
+}
+.media-drop-label small, .video-empty small {
+  display: block;
+  margin-top: 6px;
+  font-weight: 500;
+  font-size: 13px;
+  opacity: .8;
+}
+.video-drop.video-has {
+  border: 0;
 }
 .media-card figcaption { position: absolute; left: 0; right: 0; bottom: 0; padding: 12px; color: #fff; }
 .media-play {
