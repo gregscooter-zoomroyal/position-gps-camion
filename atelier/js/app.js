@@ -2,7 +2,7 @@
   const AUTH_KEY = "atelier-auth-v1";
   const DATA_KEY = "atelier-sites-v2";
   const DATA_KEY_OLD = "atelier-sites-v1";
-  const APP_VERSION = "10";
+  const APP_VERSION = "11";
   const SHARED_KEYS = ["cursor"];
   const SERVER_LOCK = new Set(["site-pavage-go"]);
   const $ = (s, r = document) => r.querySelector(s);
@@ -61,24 +61,53 @@
     return url;
   }
 
+  function loopAttrs() {
+    return 'autoplay muted loop playsinline webkit-playsinline preload="auto" disablepictureinpicture controlslist="nodownload nofullscreen noremoteplayback"';
+  }
+
+  function armVideo(el) {
+    if (!el || el.tagName !== "VIDEO") return;
+    const play = () => {
+      el.muted = true;
+      el.defaultMuted = true;
+      el.volume = 0;
+      el.loop = true;
+      el.autoplay = true;
+      el.playsInline = true;
+      el.controls = false;
+      const p = el.play();
+      if (p && p.catch) p.catch(() => {});
+    };
+    if (el.dataset.armed === "1") {
+      play();
+      return;
+    }
+    el.dataset.armed = "1";
+    el.setAttribute("muted", "");
+    el.setAttribute("autoplay", "");
+    el.setAttribute("loop", "");
+    el.setAttribute("playsinline", "");
+    el.setAttribute("webkit-playsinline", "");
+    el.removeAttribute("controls");
+    el.addEventListener("loadeddata", play);
+    el.addEventListener("canplay", play);
+    el.addEventListener("ended", () => { el.currentTime = 0; play(); });
+    play();
+  }
+
+  function kickVideos(root) {
+    (root || document).querySelectorAll("video").forEach(armVideo);
+  }
+
   async function hydrateMedia(root) {
     if (!root) return;
     const els = [...root.querySelectorAll("[data-media-src]")];
     for (const el of els) {
       const src = await mediaUrl(el.dataset.mediaSrc);
       if (src) el.src = src;
-      if (el.tagName === "VIDEO") {
-        el.muted = true;
-        el.loop = true;
-        el.autoplay = true;
-        el.playsInline = true;
-        el.play().catch(() => {});
-      }
+      armVideo(el);
     }
-    root.querySelectorAll("video[autoplay]").forEach(v => {
-      v.muted = true;
-      v.play().catch(() => {});
-    });
+    kickVideos(root);
   }
 
   function loadSites() {
@@ -216,11 +245,14 @@
     if (!url) return `<div class="video-empty">Clique ici<br><small>Choisis le MP4 sur ton ordinateur</small></div>`;
     const raw = String(url).trim();
     let m = raw.match(/(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([\w-]{11})/);
-    if (m) return `<iframe src="https://www.youtube-nocookie.com/embed/${m[1]}" allowfullscreen allow="encrypted-media"></iframe>`;
+    if (m) {
+      const id = m[1];
+      return `<iframe src="https://www.youtube-nocookie.com/embed/${id}?autoplay=1&mute=1&controls=0&loop=1&playlist=${id}&playsinline=1&rel=0" allow="autoplay; encrypted-media" title=""></iframe>`;
+    }
     m = raw.match(/vimeo\.com\/(?:video\/)?(\d+)/);
-    if (m) return `<iframe src="https://player.vimeo.com/video/${m[1]}" allowfullscreen></iframe>`;
-    if (raw.startsWith("idb:")) return `<video autoplay muted loop playsinline data-media-src="${esc(raw)}"></video>`;
-    return `<video autoplay muted loop playsinline src="${esc(raw)}"></video>`;
+    if (m) return `<iframe src="https://player.vimeo.com/video/${m[1]}?background=1&autoplay=1&loop=1&muted=1" allow="autoplay" title=""></iframe>`;
+    if (raw.startsWith("idb:")) return `<video ${loopAttrs()} data-media-src="${esc(raw)}"></video>`;
+    return `<video ${loopAttrs()} src="${esc(raw)}"></video>`;
   }
 
   function parseVideoBg(url) {
@@ -233,8 +265,8 @@
     }
     m = raw.match(/vimeo\.com\/(?:video\/)?(\d+)/);
     if (m) return `<iframe class="bg-frame" src="https://player.vimeo.com/video/${m[1]}?background=1&autoplay=1&loop=1&muted=1" allow="autoplay" title=""></iframe>`;
-    if (raw.startsWith("idb:")) return `<video class="bg-video" autoplay muted loop playsinline preload="auto" data-media-src="${esc(raw)}"></video>`;
-    return `<video class="bg-video" autoplay muted loop playsinline preload="auto" src="${esc(raw)}"></video>`;
+    if (raw.startsWith("idb:")) return `<video class="bg-video" ${loopAttrs()} data-media-src="${esc(raw)}"></video>`;
+    return `<video class="bg-video" ${loopAttrs()} src="${esc(raw)}"></video>`;
   }
 
   function heroCopy(sec, d, f, editable) {
@@ -347,12 +379,16 @@
         }
         const fileVid = isFileVideo(it.video);
         const thumb = fileVid
-          ? `<video autoplay muted loop playsinline preload="auto" data-media-src="${esc(it.video)}"></video>`
+          ? `<video ${loopAttrs()} data-media-src="${esc(it.video)}"></video>`
           : (it.video
             ? parseVideo(it.video)
             : `<img src="${esc(it.image)}" alt="">`);
-        return `<figure class="media-card media-loop"${uploadAttr}>
+        const replace = editable && it.video
+          ? `<button class="video-replace" type="button" data-upload="${sec.id}:${i}">Remplacer</button>`
+          : "";
+        return `<figure class="media-card media-loop">
           ${thumb}
+          ${replace}
           <figcaption>
             <div class="kicker">${f("items." + i + ".kicker", it.kicker)}</div>
             <h4>${f("items." + i + ".title", it.title, "span")}</h4>
@@ -373,11 +409,14 @@
       </div></div>`;
     }
     if (sec.type === "video") {
-      const box = editable
-        ? (d.url
-          ? `<div class="video-box video-drop video-has" data-upload-url="${sec.id}">${parseVideo(d.url)}</div>`
-          : `<div class="video-box video-drop" data-upload-url="${sec.id}"><div class="media-drop-label">Clique ici ou glisse le MP4<br><small>Fichier sur ton ordinateur — Bureau</small></div></div>`)
-        : `<div class="video-box">${parseVideo(d.url)}</div>`;
+      let box;
+      if (!editable) {
+        box = `<div class="video-box">${parseVideo(d.url)}</div>`;
+      } else if (!d.url) {
+        box = `<div class="video-box video-drop" data-upload-url="${sec.id}"><div class="media-drop-label">Clique ici ou glisse le MP4<br><small>Fichier sur ton ordinateur — Bureau</small></div></div>`;
+      } else {
+        box = `<div class="video-box video-has">${parseVideo(d.url)}<button class="video-replace" type="button" data-upload-url="${sec.id}">Remplacer</button></div>`;
+      }
       return `<div class="s-video pad">${f("title", d.title, "h3")}${box}</div>`;
     }
     if (sec.type === "gallery") {
@@ -1207,6 +1246,14 @@
     });
 
     window.addEventListener("hashchange", route);
+    document.addEventListener("click", () => kickVideos(), true);
+    document.addEventListener("touchstart", () => kickVideos(), { capture: true, passive: true });
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) kickVideos(); });
+    setInterval(() => {
+      document.querySelectorAll("video").forEach(v => {
+        if (v.paused) armVideo(v);
+      });
+    }, 800);
   }
 
   const groups = [];
