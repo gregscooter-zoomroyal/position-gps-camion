@@ -263,13 +263,22 @@ input, textarea, select {
 .pub.has-asphalt .s-nav .links { opacity: .9; }
 .canvas.has-asphalt .s-hero.on-canvas,
 .pub.has-asphalt .s-hero.on-canvas {
-  background: rgba(70, 70, 72, .28);
-  min-height: 480px;
+  background-color: #6a6a6c;
+  min-height: 520px;
   align-items: center;
+  justify-items: center;
+}
+.canvas.has-asphalt .s-hero.on-canvas.has-mark,
+.pub.has-asphalt .s-hero.on-canvas.has-mark {
+  background-color: #737375;
+  background-image: var(--hero-logo);
+  background-repeat: no-repeat;
+  background-position: center 40%;
+  background-size: auto 78%;
 }
 .canvas.has-asphalt .s-hero.on-canvas .shade,
 .pub.has-asphalt .s-hero.on-canvas .shade {
-  background: linear-gradient(180deg, rgba(30,30,32,.04), rgba(20,20,22,.38));
+  display: none;
 }
 .canvas.has-asphalt .s-stats,
 .pub.has-asphalt .s-stats {
@@ -353,19 +362,35 @@ input, textarea, select {
   border: 0;
   pointer-events: none;
 }
+.s-hero .copy { position: relative; z-index: 3; max-width: 720px; text-shadow: 0 2px 14px rgba(0,0,0,.55); isolation: isolate; }
+.s-hero.on-canvas.has-mark .copy { text-align: center; width: 100%; max-width: none; }
 .s-hero .hero-mark {
   position: absolute;
   left: 50%;
   top: 46%;
-  transform: translate(-50%, -50%);
-  width: min(440px, 82%);
+  transform: translate(-50%, -58%);
+  width: min(360px, 72%);
   height: auto;
   z-index: 1;
   pointer-events: none;
   opacity: 1;
 }
+.s-hero.on-canvas.has-mark .hero-mark {
+  display: block;
+  z-index: 2;
+  top: 50%;
+  transform: translate(-50%, -58%);
+  width: min(420px, 80%);
+}
 .s-hero .shade { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,.2), rgba(0,0,0,.72)); z-index: 2; }
-.s-hero .copy { position: relative; z-index: 3; max-width: 640px; text-shadow: 0 2px 14px rgba(0,0,0,.55); }
+.s-hero .copy .kicker,
+.s-hero .copy h2,
+.s-hero .copy p,
+.s-hero .copy .s-btn,
+.s-hero .copy > span {
+  position: relative;
+  z-index: 1;
+}
 .s-hero .kicker { letter-spacing: .2em; text-transform: uppercase; font-size: 11px; opacity: .85; }
 .s-hero h2 { font-size: 52px; line-height: .95; margin: 8px 0; }
 .s-hero p { font-size: 18px; opacity: .92; }
