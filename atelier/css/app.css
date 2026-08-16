@@ -372,13 +372,36 @@ input, textarea, select {
   color: #fff;
   overflow: hidden;
 }
-.s-hero.has-video, .s-video-bg { min-height: 560px; }
+.s-hero.has-video, .s-hero.has-photo, .s-video-bg { min-height: 560px; }
+.s-hero.drop-hover {
+  outline: 3px dashed #fff;
+  outline-offset: -10px;
+}
 .hero-media {
   position: absolute; inset: 0;
   overflow: hidden;
   background: #111;
 }
-.hero-media .bg-video { width: 100%; height: 100%; object-fit: cover; }
+.hero-media .bg-video,
+.hero-media .hero-photo,
+.video-box .hero-photo {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.about-photo {
+  min-height: 180px;
+  border-radius: 12px;
+  overflow: hidden;
+}
+.about-photo img { width: 100%; height: 280px; object-fit: cover; border-radius: 12px; display: block; }
+.gal-item { min-height: 0; }
+.gal-add { min-height: 180px; border-radius: 10px; }
+.drop-hover {
+  outline: 2px dashed #fff;
+  outline-offset: -4px;
+}
 .hero-media .bg-frame {
   position: absolute;
   top: 50%; left: 50%;
@@ -469,7 +492,9 @@ input, textarea, select {
   border: 1px solid #e5e7eb; background: #fff; overflow: hidden;
 }
 .car-img { height: 150px; overflow: hidden; }
-.car-img img { width: 100%; height: 100%; object-fit: cover; }
+.car-img img, .car-img video { width: 100%; height: 100%; object-fit: cover; }
+.car-img.media-drop { cursor: pointer; }
+.car-img .media-drop-label { font-size: 13px; padding: 8px; }
 .car-body { padding: 12px; }
 .car-body h4 { margin: 4px 0; font-size: 18px; }
 .car-body p { margin: 0; font-size: 13px; color: #6b7280; }
@@ -512,7 +537,7 @@ video::-webkit-media-controls-overlay-play-button {
   position: absolute;
   top: 10px;
   right: 10px;
-  z-index: 3;
+  z-index: 6;
   border: 0;
   border-radius: 6px;
   padding: 6px 10px;
@@ -586,6 +611,7 @@ video::-webkit-media-controls-overlay-play-button {
 }
 .s-map iframe { width: 100%; height: 280px; border: 0; border-radius: 12px; }
 .s-logos .logo-row { display: flex; flex-wrap: wrap; gap: 18px; align-items: center; }
+.s-logos .logo-row img { height: 40px; width: auto; object-fit: contain; }
 .s-logos .logo-pill {
   padding: 10px 16px;
   border: 1px solid #e5e7eb;

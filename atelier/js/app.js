@@ -2,11 +2,11 @@
   const AUTH_KEY = "atelier-auth-v1";
   const DATA_KEY = "atelier-sites-v2";
   const DATA_KEY_OLD = "atelier-sites-v1";
-  const APP_VERSION = "20";
+  const APP_VERSION = "21";
   const SHARED_KEYS = ["cursor"];
   const SERVER_LOCK = new Set(["site-pavage-go"]);
-  const PAVAGE_LOGO = "assets/logo-pavage-go.png?v=20";
-  const PAVAGE_ASPHALT = "assets/asphalte-bande.jpg?v=20";
+  const PAVAGE_LOGO = "assets/logo-pavage-go.png?v=21";
+  const PAVAGE_ASPHALT = "assets/asphalte-bande.jpg?v=21";
   const DOCK_TYPES = new Set(["services", "about", "contact", "carousel", "media", "video", "gallery", "faq", "quotes", "hours", "form", "map", "logos"]);
   const $ = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -34,17 +34,29 @@
     });
   }
 
+  function isPicFile(file) {
+    const t = String((file && file.type) || "").toLowerCase();
+    const n = String((file && file.name) || "").toLowerCase();
+    return t.startsWith("image/") || /\.(jpe?g|png|gif|webp|avif|heic|bmp)$/.test(n);
+  }
+
+  function idbKey(ref) {
+    return String(ref || "").replace(/^idb:(img:|vid:)?/, "");
+  }
+
   async function mediaPut(file) {
     const id = uid("file");
     const buf = await file.arrayBuffer();
+    const pic = isPicFile(file);
+    const mime = file.type || (pic ? "image/jpeg" : "video/mp4");
     const db = await openMediaDb();
     await new Promise((resolve, reject) => {
       const tx = db.transaction("files", "readwrite");
-      tx.objectStore("files").put({ type: file.type || "video/mp4", name: file.name || "", buf }, id);
+      tx.objectStore("files").put({ type: mime, name: file.name || "", buf }, id);
       tx.oncomplete = resolve;
       tx.onerror = () => reject(tx.error);
     });
-    return "idb:" + id;
+    return (pic ? "idb:img:" : "idb:vid:") + id;
   }
 
   async function mediaUrl(ref) {
@@ -54,12 +66,13 @@
     const db = await openMediaDb();
     const rec = await new Promise((resolve, reject) => {
       const tx = db.transaction("files", "readonly");
-      const q = tx.objectStore("files").get(raw.slice(4));
+      const q = tx.objectStore("files").get(idbKey(raw));
       q.onsuccess = () => resolve(q.result);
       q.onerror = () => reject(q.error);
     });
     if (!rec) return "";
-    const url = URL.createObjectURL(new Blob([rec.buf], { type: rec.type || "video/mp4" }));
+    const fallback = String(raw).startsWith("idb:img:") ? "image/jpeg" : "video/mp4";
+    const url = URL.createObjectURL(new Blob([rec.buf], { type: rec.type || fallback }));
     blobUrls.set(raw, url);
     return url;
   }
@@ -259,7 +272,17 @@
 
   function isFileVideo(url) {
     const u = String(url || "");
-    return u.startsWith("idb:") || u.startsWith("blob:") || /\.(mp4|webm|mov)($|\?)/i.test(u);
+    if (!u) return false;
+    if (u.startsWith("idb:img:")) return false;
+    if (/\.(jpe?g|png|gif|webp|avif|heic|bmp)($|\?)/i.test(u)) return false;
+    return u.startsWith("idb:") || u.startsWith("blob:") || /\.(mp4|webm|mov|m4v)($|\?)/i.test(u) || /youtube|youtu\.be|vimeo/.test(u);
+  }
+
+  function dropLabel(photoOnly) {
+    if (photoOnly) {
+      return `<div class="media-drop-label">Clique ici ou glisse une photo<br><small>JPG, PNG ou WebP — même geste que pour les MP4</small></div>`;
+    }
+    return `<div class="media-drop-label">Clique ici ou glisse une photo ou un MP4<br><small>Fichier sur ton ordinateur</small></div>`;
   }
 
   function parseVideo(url) {
@@ -364,21 +387,26 @@
     const f = (path, text, tag) => editable ? field(sec, path, text, tag) : `<${tag || "span"}>${esc(text)}</${tag || "span"}>`;
     if (sec.type === "nav") return navMarkup(sec, d, f, editable, site, preview);
     if (sec.type === "hero") {
-      const bg = d.video
+      const hasVid = !!d.video;
+      const hasPhoto = !!d.image;
+      const bg = hasVid
         ? `<div class="hero-media">${parseVideoBg(d.video)}</div>`
-        : "";
-      const photo = d.image && !isLocalRef(d.image) ? d.image : "";
-      const img = d.video ? "" : (photo ? `style="background-image:url('${esc(photo)}')"` : "");
+        : (hasPhoto ? `<div class="hero-media">${imgTag(d.image, "hero-photo")}</div>` : "");
       const markSrc = heroLogoSrc(d, site);
       const mark = imgTag(markSrc, "hero-mark");
-      const onCanvas = !d.video && !photo;
+      const onCanvas = !hasVid && !hasPhoto;
       const host = markSrc ? ` data-logo-host="${esc(markSrc)}"` : "";
       const style = onCanvas && markSrc && !isLocalRef(markSrc)
         ? `style="--hero-logo:url('${esc(markSrc)}')"`
-        : img;
-      return `<div class="s-hero ${d.video ? "has-video" : ""} ${onCanvas ? "on-canvas" : ""} ${markSrc ? "has-mark" : ""}" ${style}${host}>
+        : "";
+      const pickHero = editable ? ` data-upload-hero="${sec.id}"` : "";
+      const addBtn = editable
+        ? `<button class="video-replace" type="button" data-upload-hero="${sec.id}">Photo ou MP4</button>`
+        : "";
+      return `<div class="s-hero ${hasVid ? "has-video" : ""} ${hasPhoto ? "has-photo" : ""} ${onCanvas ? "on-canvas" : ""} ${markSrc ? "has-mark" : ""}" ${style}${host}${pickHero}>
         ${bg}
         ${mark}
+        ${addBtn}
         ${heroCopy(sec, d, f, editable)}
       </div>`;
     }
@@ -398,15 +426,21 @@
       return `<div class="s-stats">${cells}</div>`;
     }
     if (sec.type === "carousel") {
-      const cards = (d.cards || []).map((c, i) => `
+      const cards = (d.cards || []).map((c, i) => {
+        const drop = editable ? ` data-upload-car="${sec.id}:${i}"` : "";
+        const pic = c.image
+          ? imgTag(c.image, "")
+          : (editable ? dropLabel(true) : "");
+        return `
         <article class="car-card">
-          <div class="car-img"><img src="${esc(c.image)}" alt=""></div>
+          <div class="car-img ${editable ? "media-drop" : ""}"${drop}>${pic}</div>
           <div class="car-body">
             <div class="kicker">${f("cards." + i + ".kicker", c.kicker)}</div>
             <h4>${f("cards." + i + ".title", c.title, "span")}</h4>
             <p>${f("cards." + i + ".text", c.text)}</p>
           </div>
-        </article>`).join("");
+        </article>`;
+      }).join("");
       return `<div class="s-carousel pad">
         ${f("title", d.title, "h3")}
         <div class="car-row">
@@ -419,25 +453,26 @@
     if (sec.type === "media") {
       const cards = (d.items || []).map((it, i) => {
         const uploadAttr = editable ? ` data-upload="${sec.id}:${i}"` : "";
-        if (editable && !it.video) {
+        const empty = !it.video && !it.image;
+        if (editable && empty) {
           return `<figure class="media-card media-drop"${uploadAttr}>
-            <div class="media-drop-label">Clique ici ou glisse le MP4<br><small>Fichier sur ton ordinateur — Bureau</small></div>
+            ${dropLabel()}
             <figcaption>
               <div class="kicker">${f("items." + i + ".kicker", it.kicker)}</div>
               <h4>${f("items." + i + ".title", it.title, "span")}</h4>
             </figcaption>
           </figure>`;
         }
-        const fileVid = isFileVideo(it.video);
-        const thumb = fileVid
-          ? `<video ${loopAttrs()} data-media-src="${esc(it.video)}"></video>`
-          : (it.video
-            ? parseVideo(it.video)
-            : `<img src="${esc(it.image)}" alt="">`);
-        const replace = editable && it.video
+        const fileVid = !!it.video && isFileVideo(it.video);
+        const thumb = it.video
+          ? (fileVid
+            ? `<video ${loopAttrs()} ${isLocalRef(it.video) ? `data-media-src="${esc(it.video)}"` : `src="${esc(it.video)}"`}></video>`
+            : parseVideo(it.video))
+          : imgTag(it.image, "");
+        const replace = editable
           ? `<button class="video-replace" type="button" data-upload="${sec.id}:${i}">Remplacer</button>`
           : "";
-        return `<figure class="media-card media-loop">
+        return `<figure class="media-card media-loop"${uploadAttr}>
           ${thumb}
           ${replace}
           <figcaption>
@@ -454,25 +489,38 @@
       return `<div class="s-services pad">${f("title", d.title, "h3")}<div class="svc-grid">${items}</div></div>`;
     }
     if (sec.type === "about") {
+      const pic = d.image
+        ? imgTag(d.image, "")
+        : (editable ? dropLabel(true) : "");
+      const drop = editable ? ` data-upload-about="${sec.id}"` : "";
       return `<div class="s-about pad"><div class="about-grid">
         <div>${f("title", d.title, "h3")}${f("text", d.text, "p")}</div>
-        <img src="${esc(d.image)}" alt="">
+        <div class="about-photo ${editable ? "media-drop" : ""}"${drop}>${pic}</div>
       </div></div>`;
     }
     if (sec.type === "video") {
       let box;
+      const hasImg = !!d.image && !d.url;
       if (!editable) {
-        box = `<div class="video-box">${parseVideo(d.url)}</div>`;
-      } else if (!d.url) {
-        box = `<div class="video-box video-drop" data-upload-url="${sec.id}"><div class="media-drop-label">Clique ici ou glisse le MP4<br><small>Fichier sur ton ordinateur — Bureau</small></div></div>`;
+        box = `<div class="video-box">${hasImg ? imgTag(d.image, "hero-photo") : parseVideo(d.url)}</div>`;
+      } else if (!d.url && !d.image) {
+        box = `<div class="video-box video-drop" data-upload-url="${sec.id}">${dropLabel()}</div>`;
       } else {
-        box = `<div class="video-box video-has">${parseVideo(d.url)}<button class="video-replace" type="button" data-upload-url="${sec.id}">Remplacer</button></div>`;
+        const inner = hasImg ? imgTag(d.image, "hero-photo") : parseVideo(d.url);
+        box = `<div class="video-box video-has">${inner}<button class="video-replace" type="button" data-upload-url="${sec.id}">Remplacer</button></div>`;
       }
       return `<div class="s-video pad">${f("title", d.title, "h3")}${box}</div>`;
     }
     if (sec.type === "gallery") {
-      const imgs = (d.images || []).map(src => `<img src="${esc(src)}" alt="">`).join("");
-      return `<div class="s-gallery pad">${f("title", d.title, "h3")}<div class="gal">${imgs}</div></div>`;
+      const imgs = (d.images || []).map((src, i) => {
+        const tag = imgTag(src, "");
+        if (!editable) return tag;
+        return `<div class="gal-item" data-upload-gal="${sec.id}:${i}">${tag}</div>`;
+      }).join("");
+      const add = editable
+        ? `<div class="gal-add media-drop" data-upload-gal="${sec.id}">${dropLabel(true)}</div>`
+        : "";
+      return `<div class="s-gallery pad">${f("title", d.title, "h3")}<div class="gal">${imgs}${add}</div></div>`;
     }
     if (sec.type === "cta") {
       const href = (d.href || "").trim();
@@ -531,7 +579,7 @@
     }
     if (sec.type === "logos") {
       const items = (d.items || []).map((it, i) => it.image
-        ? `<img src="${esc(it.image)}" alt="${esc(it.label || "")}" height="40">`
+        ? imgTag(it.image, "")
         : `<span class="logo-pill">${f("items." + i + ".label", it.label)}</span>`
       ).join("");
       return `<div class="s-logos pad">${f("title", d.title, "h3")}<div class="logo-row">${items}</div></div>`;
@@ -837,12 +885,73 @@
     saveSites();
   }
 
+  function applyPathFile(sec, path, ref, pic) {
+    const itemMedia = String(path).match(/^items\.(\d+)\.(image|video)$/);
+    if (itemMedia) {
+      const it = sec.data.items && sec.data.items[Number(itemMedia[1])];
+      if (!it) return;
+      if (pic) {
+        it.image = ref;
+        it.video = "";
+      } else {
+        it.video = ref;
+        it.image = "";
+      }
+      return;
+    }
+    const cardImg = String(path).match(/^cards\.(\d+)\.image$/);
+    if (cardImg) {
+      if (!pic) {
+        alert("Choisis une photo (JPG, PNG ou WebP) pour cette carte.");
+        return;
+      }
+      if (sec.data.cards && sec.data.cards[Number(cardImg[1])]) {
+        sec.data.cards[Number(cardImg[1])].image = ref;
+      }
+      return;
+    }
+    if (pic && path === "logo") {
+      sec.data.logo = ref;
+      if (sec.type === "hero") sec.data.image = sec.data.image || "";
+      if (sec.type === "nav") {
+        const hero = currentPage().sections.find(s => s.type === "hero");
+        if (hero && hero.data) hero.data.logo = ref;
+      }
+      return;
+    }
+    if (sec.type === "hero" && (path === "image" || path === "video")) {
+      if (pic) {
+        sec.data.image = ref;
+        sec.data.video = "";
+      } else {
+        sec.data.video = ref;
+        sec.data.image = "";
+      }
+      return;
+    }
+    if (sec.type === "video" && (path === "url" || path === "image")) {
+      if (pic) {
+        sec.data.image = ref;
+        sec.data.url = "";
+      } else {
+        sec.data.url = ref;
+        sec.data.image = "";
+      }
+      return;
+    }
+    setPath(sec.data, path, ref);
+  }
+
   function startPick(target) {
     uploadTarget = target;
     const input = $("#file-media");
     if (!input) return;
-    const image = target.path && /image|logo/.test(target.path);
-    input.accept = image ? "image/*" : "video/mp4,video/webm,video/quicktime,image/*";
+    const logoOnly = target.path && /(^|\.)logo$/.test(String(target.path));
+    const photoOnly = !!(target.about || target.carousel || target.gallery) ||
+      /^cards\.\d+\.image$/.test(String(target.path || ""));
+    input.accept = (logoOnly || photoOnly)
+      ? "image/*"
+      : "image/*,video/mp4,video/webm,video/quicktime,.jpg,.jpeg,.png,.webp,.gif,.heic";
     input.value = "";
     input.click();
   }
@@ -850,38 +959,83 @@
   async function takeFile(file) {
     if (!file || !uploadTarget || !state.current) return;
     if (file.size > 80 * 1024 * 1024) {
-      alert("Fichier trop lourd (max 80 Mo). Compresse la vidéo, ou mets-la sur YouTube et colle le lien.");
+      alert("Fichier trop lourd (max 80 Mo). Compresse-le, ou mets la vidéo sur YouTube et colle le lien.");
       return;
     }
     const ref = await mediaPut(file);
+    const pic = isPicFile(file);
+    const nice = file.name.replace(/\.[^.]+$/, "") || (pic ? "Photo" : "Vidéo");
     snapshot();
     if (uploadTarget.media) {
       const [secId, idx] = uploadTarget.media;
       const block = currentPage().sections.find(s => s.id === secId);
       if (block && block.data.items && block.data.items[idx] != null) {
-        block.data.items[idx].video = ref;
-        block.data.items[idx].kicker = "Chantier";
-        block.data.items[idx].title = file.name.replace(/\.[^.]+$/, "") || "Vidéo";
+        const it = block.data.items[idx];
+        if (pic) {
+          it.image = ref;
+          it.video = "";
+        } else {
+          it.video = ref;
+          it.image = "";
+        }
+        it.kicker = pic ? "Photo" : "Chantier";
+        it.title = nice;
       }
     } else if (uploadTarget.url) {
       const block = currentPage().sections.find(s => s.id === uploadTarget.url);
-      if (block) block.data.url = ref;
-    } else if (uploadTarget.path && currentSection()) {
-      const sec = currentSection();
-      const isPic = (file.type || "").startsWith("image/");
-      if (isPic && (uploadTarget.path === "logo" || uploadTarget.path === "image") && sec.type === "hero") {
-        sec.data.logo = ref;
-        sec.data.image = "";
-      } else {
-        setPath(sec.data, uploadTarget.path, ref);
-      }
-      if (isPic && uploadTarget.path === "logo" && sec.type === "nav") {
-        const hero = currentPage().sections.find(s => s.type === "hero");
-        if (hero && hero.data) {
-          hero.data.logo = ref;
-          if (isLocalRef(hero.data.image)) hero.data.image = "";
+      if (block) {
+        if (pic) {
+          block.data.image = ref;
+          block.data.url = "";
+        } else {
+          block.data.url = ref;
+          block.data.image = "";
         }
       }
+    } else if (uploadTarget.hero) {
+      const block = currentPage().sections.find(s => s.id === uploadTarget.hero);
+      if (block) {
+        if (pic) {
+          block.data.image = ref;
+          block.data.video = "";
+        } else {
+          block.data.video = ref;
+          block.data.image = "";
+        }
+      }
+    } else if (uploadTarget.about) {
+      if (!pic) {
+        alert("Glisse une photo (JPG, PNG ou WebP) dans ce carré. Les MP4 vont dans Média, Vidéo ou le bandeau.");
+        return;
+      }
+      const block = currentPage().sections.find(s => s.id === uploadTarget.about);
+      if (block) block.data.image = ref;
+    } else if (uploadTarget.carousel) {
+      if (!pic) {
+        alert("Glisse une photo (JPG, PNG ou WebP) dans cette carte. Les MP4 vont dans Média, Vidéo ou le bandeau.");
+        return;
+      }
+      const [secId, idx] = uploadTarget.carousel;
+      const block = currentPage().sections.find(s => s.id === secId);
+      if (block && block.data.cards && block.data.cards[idx] != null) {
+        block.data.cards[idx].image = ref;
+      }
+    } else if (uploadTarget.gallery) {
+      if (!pic) {
+        alert("Glisse une photo (JPG, PNG ou WebP) dans la galerie. Les MP4 vont dans Média, Vidéo ou le bandeau.");
+        return;
+      }
+      const spec = String(uploadTarget.gallery);
+      const parts = spec.split(":");
+      const block = currentPage().sections.find(s => s.id === parts[0]);
+      if (block) {
+        if (!Array.isArray(block.data.images)) block.data.images = [];
+        const idx = parts.length > 1 ? Number(parts[1]) : -1;
+        if (idx >= 0 && block.data.images[idx] != null) block.data.images[idx] = ref;
+        else block.data.images.push(ref);
+      }
+    } else if (uploadTarget.path && currentSection()) {
+      applyPathFile(currentSection(), uploadTarget.path, ref, pic);
     }
     persistSite();
     renderEditor();
@@ -942,7 +1096,7 @@
     document.addEventListener("pointerdown", (e) => {
       if (e.button !== 0) return;
       if (!$("#screen-editor") || !$("#screen-editor").classList.contains("on")) return;
-      if (e.target.closest("a,button,input,textarea,select,summary,.editable,[contenteditable],[data-upload],[data-upload-url],video,iframe,.car-btn,.car-track")) return;
+      if (e.target.closest("a,button,input,textarea,select,summary,.editable,[contenteditable],[data-upload],[data-upload-url],[data-upload-about],[data-upload-car],[data-upload-gal],video,iframe,.car-btn,.car-track")) return;
       const sec = e.target.closest("#canvas .sec");
       if (!sec || !sec.dataset.id) return;
       const r = sec.getBoundingClientRect();
@@ -1123,14 +1277,35 @@
       }
       if (e.target.id === "btn-new" || e.target.closest("#btn-new")) openCreate();
       const upCard = e.target.closest("[data-upload]");
-      if (upCard && $("#screen-editor") && $("#screen-editor").classList.contains("on") && !e.target.closest(".editable")) {
+      if (upCard && $("#screen-editor") && $("#screen-editor").classList.contains("on") && !canvasDrag.moved && !e.target.closest(".editable")) {
         const parts = upCard.dataset.upload.split(":");
         startPick({ media: [parts[0], Number(parts[1])] });
         return;
       }
       const upUrl = e.target.closest("[data-upload-url]");
-      if (upUrl) {
+      if (upUrl && !canvasDrag.moved) {
         startPick({ url: upUrl.dataset.uploadUrl });
+        return;
+      }
+      const upHero = e.target.closest("[data-upload-hero]");
+      if (upHero && !canvasDrag.moved && !e.target.closest(".editable") && !e.target.closest(".copy")) {
+        startPick({ hero: upHero.dataset.uploadHero });
+        return;
+      }
+      const upAbout = e.target.closest("[data-upload-about]");
+      if (upAbout && !canvasDrag.moved && !e.target.closest(".editable")) {
+        startPick({ about: upAbout.dataset.uploadAbout });
+        return;
+      }
+      const upCar = e.target.closest("[data-upload-car]");
+      if (upCar && !canvasDrag.moved && !e.target.closest(".editable")) {
+        const parts = upCar.dataset.uploadCar.split(":");
+        startPick({ carousel: [parts[0], Number(parts[1])] });
+        return;
+      }
+      const upGal = e.target.closest("[data-upload-gal]");
+      if (upGal && !canvasDrag.moved) {
+        startPick({ gallery: upGal.dataset.uploadGal });
         return;
       }
       const pick = e.target.closest("[data-pick]");
@@ -1335,24 +1510,43 @@
     });
     document.addEventListener("dragover", (e) => {
       if (!$("#screen-editor") || !$("#screen-editor").classList.contains("on")) return;
-      if (e.target.closest("[data-upload],[data-upload-url]")) {
+      const zone = e.target.closest("[data-upload],[data-upload-url],[data-upload-hero],[data-upload-about],[data-upload-car],[data-upload-gal]");
+      if (zone) {
         e.preventDefault();
         e.dataTransfer.dropEffect = "copy";
+        zone.classList.add("drop-hover");
       }
+    });
+    document.addEventListener("dragleave", (e) => {
+      const zone = e.target.closest("[data-upload],[data-upload-url],[data-upload-hero],[data-upload-about],[data-upload-car],[data-upload-gal]");
+      if (zone && !zone.contains(e.relatedTarget)) zone.classList.remove("drop-hover");
     });
     document.addEventListener("drop", async (e) => {
       if (!$("#screen-editor") || !$("#screen-editor").classList.contains("on")) return;
       const card = e.target.closest("[data-upload]");
       const urlBox = e.target.closest("[data-upload-url]");
-      if (!card && !urlBox) return;
+      const hero = e.target.closest("[data-upload-hero]");
+      const about = e.target.closest("[data-upload-about]");
+      const car = e.target.closest("[data-upload-car]");
+      const gal = e.target.closest("[data-upload-gal]");
+      if (!card && !urlBox && !hero && !about && !car && !gal) return;
       e.preventDefault();
       const file = e.dataTransfer.files && e.dataTransfer.files[0];
       if (!file) return;
       if (card) {
         const parts = card.dataset.upload.split(":");
         uploadTarget = { media: [parts[0], Number(parts[1])] };
-      } else {
+      } else if (urlBox) {
         uploadTarget = { url: urlBox.dataset.uploadUrl };
+      } else if (hero) {
+        uploadTarget = { hero: hero.dataset.uploadHero };
+      } else if (about) {
+        uploadTarget = { about: about.dataset.uploadAbout };
+      } else if (car) {
+        const parts = car.dataset.uploadCar.split(":");
+        uploadTarget = { carousel: [parts[0], Number(parts[1])] };
+      } else {
+        uploadTarget = { gallery: gal.dataset.uploadGal };
       }
       try { await takeFile(file); }
       catch { alert("Impossible d'importer ce fichier."); }
