@@ -2,9 +2,10 @@
   const AUTH_KEY = "atelier-auth-v1";
   const DATA_KEY = "atelier-sites-v2";
   const DATA_KEY_OLD = "atelier-sites-v1";
-  const APP_VERSION = "11";
+  const APP_VERSION = "12";
   const SHARED_KEYS = ["cursor"];
   const SERVER_LOCK = new Set(["site-pavage-go"]);
+  const PAVAGE_LOGO = "assets/logo-pavage-go.png";
   const $ = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 
@@ -174,6 +175,15 @@
       site.pages = [{ id: "home", name: "Accueil", sections: [] }];
     }
     site.pages.forEach(p => { if (!p.id) p.id = uid("page"); });
+    if (site.id === "site-pavage-go") {
+      (site.pages || []).forEach(p => {
+        (p.sections || []).forEach(s => {
+          if (!s.data) return;
+          if (s.type === "nav" && !s.data.logo) s.data.logo = PAVAGE_LOGO;
+          if (s.type === "hero" && !s.data.logo) s.data.logo = PAVAGE_LOGO;
+        });
+      });
+    }
     return site;
   }
 
@@ -269,6 +279,14 @@
     return `<video class="bg-video" ${loopAttrs()} src="${esc(raw)}"></video>`;
   }
 
+  function heroLogoSrc(d, site) {
+    if (d && d.logo) return d.logo;
+    const nav = ((site && site.pages) || []).flatMap(p => p.sections || []).find(s => s.type === "nav");
+    if (nav && nav.data && nav.data.logo) return nav.data.logo;
+    if (site && site.id === "site-pavage-go") return PAVAGE_LOGO;
+    return "";
+  }
+
   function heroCopy(sec, d, f, editable) {
     const btn = f("cta", d.cta);
     const href = (d.href || "").trim();
@@ -296,9 +314,8 @@
   }
 
   function navMarkup(sec, d, f, editable, site, preview) {
-    const logo = d.logo
-      ? `<img src="${esc(d.logo)}" alt="">`
-      : "";
+    const src = d.logo || (site && site.id === "site-pavage-go" ? PAVAGE_LOGO : "");
+    const logo = src ? `<img src="${esc(src)}" alt="">` : "";
     const brand = `<div class="brand-wrap">${logo}${f("brand", d.brand, "span")}</div>`;
     if (editable) {
       return `<div class="s-nav">${brand}<div class="links">${f("links", d.links, "span")}</div></div>`;
@@ -327,8 +344,11 @@
         ? `<div class="hero-media">${parseVideoBg(d.video)}</div>`
         : "";
       const img = d.video ? "" : (d.image ? `style="background-image:url('${esc(d.image)}')"` : "");
+      const markSrc = heroLogoSrc(d, site);
+      const mark = markSrc ? `<img class="hero-mark" src="${esc(markSrc)}" alt="">` : "";
       return `<div class="s-hero ${d.video ? "has-video" : ""} ${!d.video && !d.image ? "on-canvas" : ""}" ${img}>
         ${bg}
+        ${mark}
         <div class="shade"></div>
         ${heroCopy(sec, d, f, editable)}
       </div>`;
@@ -728,7 +748,7 @@
       note: "Note",
       button: "Bouton",
       href: "Lien du bouton (tel: ou https://)",
-      logo: "URL du logo",
+      logo: "Logo (derrière le titre)",
       mailto: "Courriel de réception du formulaire",
       query: "Adresse pour la carte"
     };

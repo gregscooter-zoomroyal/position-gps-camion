@@ -31,7 +31,8 @@
             "type": "nav",
             "data": {
               "brand": "Pavage G.O.",
-              "links": "Services,Réalisations,Entreprise,Contact"
+              "links": "Services,Réalisations,Entreprise,Contact",
+              "logo": "assets/logo-pavage-go.png"
             }
           },
           {
@@ -44,7 +45,8 @@
               "cta": "Estimation gratuite · 450 378-2117",
               "href": "tel:4503782117",
               "image": "",
-              "video": ""
+              "video": "",
+              "logo": "assets/logo-pavage-go.png"
             }
           },
           {
