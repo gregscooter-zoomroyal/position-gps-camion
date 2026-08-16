@@ -240,15 +240,16 @@ input, textarea, select {
 .canvas-wrap.mobile { max-width: 390px; }
 .canvas { min-height: 100%; }
 
-/* Photo d'asphalte Pavage GO — pleine largeur, répétée sur toute la longueur */
+/* Bande d'asphalte pavagego : carreau granuleux répété, pas une photo noire étirée */
+.workspace.has-asphalt,
 .canvas-wrap.has-asphalt,
 .canvas.has-asphalt,
 .pub.has-asphalt {
-  background-color: #111 !important;
-  background-image: url("../assets/asphalte-pavage.jpg") !important;
-  background-repeat: repeat-y !important;
-  background-size: 100% auto !important;
-  background-position: center top !important;
+  background-color: #3a3a3a !important;
+  background-image: url("../assets/asphalte-bande.jpg") !important;
+  background-repeat: repeat !important;
+  background-size: 420px 420px !important;
+  background-position: 0 0 !important;
   background-blend-mode: normal !important;
 }
 .canvas.has-asphalt,
@@ -294,11 +295,15 @@ input, textarea, select {
 .canvas.has-asphalt .s-media,
 .canvas.has-asphalt .s-contact,
 .canvas.has-asphalt .s-about,
+.canvas.has-asphalt .s-video,
+.canvas.has-asphalt .s-gallery,
 .pub.has-asphalt .s-services,
 .pub.has-asphalt .s-carousel,
 .pub.has-asphalt .s-media,
 .pub.has-asphalt .s-contact,
-.pub.has-asphalt .s-about {
+.pub.has-asphalt .s-about,
+.pub.has-asphalt .s-video,
+.pub.has-asphalt .s-gallery {
   background: transparent;
   color: #f3f3f1;
 }
@@ -329,6 +334,12 @@ input, textarea, select {
 .canvas.has-asphalt .car-card,
 .pub.has-asphalt .car-card {
   border: 1px solid rgba(255,255,255,.14);
+}
+.canvas.has-asphalt .car-btn,
+.pub.has-asphalt .car-btn {
+  background: rgba(20, 20, 20, .45);
+  color: #f3f3f1;
+  border-color: rgba(255,255,255,.22);
 }
 .canvas.has-asphalt .car-body p,
 .pub.has-asphalt .car-body p {
