@@ -241,12 +241,12 @@ input, textarea, select {
 .canvas-wrap.mobile { max-width: 390px; }
 .canvas { min-height: 100%; }
 
-/* Toile d'asphalte : carreau gris granuleux (comme avant le recadrage brun) */
+/* Toile d'asphalte noire granuleuse */
 .workspace.has-asphalt,
 .canvas-wrap.has-asphalt,
 .canvas.has-asphalt,
 .pub.has-asphalt {
-  background-color: #3a3a3a !important;
+  background-color: #111111 !important;
   background-image: url("../assets/asphalte-bande.jpg") !important;
   background-repeat: repeat !important;
   background-size: 420px 420px !important;
@@ -295,13 +295,17 @@ input, textarea, select {
 .canvas.has-asphalt .s-about,
 .canvas.has-asphalt .s-video,
 .canvas.has-asphalt .s-gallery,
+.canvas.has-asphalt .s-text,
+.canvas.has-asphalt .s-logo,
 .pub.has-asphalt .s-services,
 .pub.has-asphalt .s-carousel,
 .pub.has-asphalt .s-media,
 .pub.has-asphalt .s-contact,
 .pub.has-asphalt .s-about,
 .pub.has-asphalt .s-video,
-.pub.has-asphalt .s-gallery {
+.pub.has-asphalt .s-gallery,
+.pub.has-asphalt .s-text,
+.pub.has-asphalt .s-logo {
   background: transparent;
   color: #f3f3f1;
 }
@@ -347,7 +351,7 @@ input, textarea, select {
 .pub.has-asphalt .s-contact .rows { color: #ecece8; }
 
 /* published site canvas (also editor) */
-.s-nav, .s-hero, .s-services, .s-about, .s-video, .s-gallery, .s-cta, .s-contact, .s-footer, .s-carousel, .s-media, .s-stats, .s-video-bg, .s-faq, .s-quotes, .s-hours, .s-form, .s-map, .s-logos {
+.s-nav, .s-hero, .s-services, .s-about, .s-video, .s-gallery, .s-cta, .s-contact, .s-footer, .s-carousel, .s-media, .s-stats, .s-video-bg, .s-faq, .s-quotes, .s-hours, .s-form, .s-map, .s-logos, .s-text, .s-logo {
   position: relative;
 }
 .s-nav {
@@ -413,23 +417,92 @@ input, textarea, select {
 .s-hero .copy { position: relative; z-index: 3; max-width: 720px; text-shadow: 0 2px 14px rgba(0,0,0,.55); isolation: isolate; }
 .s-hero.on-canvas.has-mark .copy { text-align: center; width: 100%; max-width: none; }
 .s-hero .hero-mark {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  width: min(380px, 70%);
+  position: relative;
+  width: min(280px, 58%);
   height: auto;
   z-index: 2;
   pointer-events: none;
   opacity: 1;
   object-fit: contain;
+  display: block;
+  margin: 0 auto 12px;
 }
 .s-hero.on-canvas.has-mark .hero-mark {
   display: block;
-  z-index: 2;
-  top: 48%;
+  width: min(320px, 64%);
+}
+.logo-slot {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.logo-slot.has-logo img:not(.hero-mark) {
+  height: 52px;
+  width: auto;
+  max-width: 160px;
+  object-fit: contain;
+}
+.logo-slot.logo-drop {
+  min-width: 120px;
+  min-height: 72px;
+  padding: 8px 12px;
+  border: 2px dashed rgba(255,255,255,.4);
+  border-radius: 12px;
+  cursor: pointer;
+  background: rgba(0,0,0,.25);
+}
+.logo-slot.logo-hero {
+  position: absolute;
+  top: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 6;
+  width: 180px;
+  height: 180px;
+  border-radius: 50%;
+  min-width: 0;
+}
+.s-hero .logo-slot.has-logo {
+  position: absolute;
+  left: 50%;
+  top: 42%;
   transform: translate(-50%, -50%);
-  width: min(440px, 78%);
+  z-index: 2;
+}
+.s-hero .logo-slot.has-logo .hero-mark {
+  width: min(320px, 70vw);
+  margin: 0;
+}
+.s-logo {
+  display: grid;
+  place-items: center;
+  min-height: 160px;
+  gap: 10px;
+}
+.s-logo .logo-slot.has-logo img {
+  height: auto;
+  width: min(280px, 70%);
+  max-width: 320px;
+}
+.s-text p { margin: 8px 0 0; line-height: 1.5; }
+.field-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 10px;
+}
+.field-row label { margin: 0; }
+.btn-mini {
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
 }
 .s-hero .shade { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,.2), rgba(0,0,0,.72)); z-index: 2; }
 .s-hero .copy .kicker,

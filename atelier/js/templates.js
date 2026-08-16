@@ -269,7 +269,7 @@ const TEMPLATES = [
           id: "home",
           name: "Accueil",
           sections: [
-            section("nav", { brand: name, links: "Services,Entreprise,Contact", logo: "assets/logo-pavage-go.png?v=22" }),
+            section("nav", { brand: name, links: "Services,Entreprise,Contact", logo: "" }),
             section("hero", {
               kicker: "Depuis 1993",
               title: name,
@@ -277,7 +277,7 @@ const TEMPLATES = [
               cta: "Demander une estimation",
               image: "",
               video: "",
-              logo: "assets/logo-pavage-go.png?v=22"
+              logo: ""
             }),
             section("stats", {
               items: [
@@ -371,7 +371,9 @@ const TEMPLATES = [
 const SECTION_CATALOG = [
   { type: "nav", label: "Barre de navigation", group: "En-tête" },
   { type: "hero", label: "Bannière (photo ou vidéo de fond)", group: "En-tête" },
+  { type: "logo", label: "Logo (tu le colles toi-même)", group: "En-tête" },
   { type: "video-bg", label: "Emplacement vidéo + texte par-dessus", group: "En-tête" },
+  { type: "text", label: "Texte", group: "Contenu" },
   { type: "services", label: "Services", group: "Contenu" },
   { type: "about", label: "À propos", group: "Contenu" },
   { type: "gallery", label: "Galerie photos", group: "Contenu" },
@@ -390,42 +392,72 @@ const SECTION_CATALOG = [
   { type: "footer", label: "Pied de page", group: "Contact" }
 ];
 
+const TEXT_SLOTS = {
+  nav: [["brand", "Nom"], ["links", "Liens"]],
+  hero: [["kicker", "Petite ligne"], ["title", "Titre"], ["subtitle", "Paragraphe"], ["cta", "Bouton"]],
+  "video-bg": [["kicker", "Petite ligne"], ["title", "Titre"], ["subtitle", "Paragraphe"], ["cta", "Bouton"]],
+  text: [["title", "Titre"], ["text", "Paragraphe"]],
+  logo: [["caption", "Légende"]],
+  services: [["title", "Titre"]],
+  about: [["title", "Titre"], ["text", "Paragraphe"]],
+  gallery: [["title", "Titre"]],
+  carousel: [["title", "Titre"]],
+  media: [["title", "Titre"]],
+  video: [["title", "Titre"]],
+  quotes: [["title", "Titre"]],
+  faq: [["title", "Titre"]],
+  logos: [["title", "Titre"]],
+  hours: [["title", "Titre"]],
+  form: [["title", "Titre"], ["button", "Bouton"]],
+  map: [["title", "Titre"]],
+  cta: [["title", "Titre"], ["button", "Bouton"]],
+  contact: [["title", "Titre"], ["address", "Adresse"], ["phone", "Téléphone"], ["email", "Courriel"]],
+  footer: [["brand", "Nom"], ["note", "Note"]]
+};
+
+const ITEM_TEMPLATES = {
+  services: { key: "items", blank: () => ({ title: "Service", text: "Description." }) },
+  stats: { key: "items", blank: () => ({ value: "0", label: "Libellé" }) },
+  carousel: { key: "cards", blank: () => ({ kicker: "", title: "Titre", text: "", image: "" }) },
+  media: { key: "items", blank: () => ({ kicker: "", title: "Média", image: "", video: "" }) },
+  quotes: { key: "items", blank: () => ({ text: "Témoignage", name: "Nom" }) },
+  faq: { key: "items", blank: () => ({ q: "Question ?", a: "Réponse." }) },
+  logos: { key: "items", blank: () => ({ label: "Nom", image: "" }) },
+  hours: { key: "items", blank: () => ({ day: "Jour", time: "Heures" }) }
+};
+
 const SITE_FONTS = ["DM Sans", "Inter", "Barlow", "Playfair Display", "Cormorant Garamond"];
 
 function blankSection(type, brand) {
   const map = {
     nav: { brand: brand || "Marque", links: "Accueil,Services,Contact", logo: "" },
-    hero: { kicker: "Accroche", title: "Titre principal", subtitle: "Une phrase claire sur l'offre.", cta: "Appel à l'action", href: "", image: "https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=1600&q=80", video: "", logo: "" },
-    "video-bg": { kicker: "Vidéo", title: "Titre sur la vidéo", subtitle: "Le texte reste lisible, la vidéo joue derrière.", cta: "En savoir plus", href: "", video: "https://videos.pexels.com/video-files/3571264/3571264-hd_1920_1080_30fps.mp4" },
+    hero: { title: "Titre principal", href: "", image: "", video: "", logo: "" },
+    logo: { image: "", caption: "" },
+    text: { title: "Titre", text: "Écris ici." },
+    "video-bg": { title: "Titre sur la vidéo", href: "", video: "https://videos.pexels.com/video-files/3571264/3571264-hd_1920_1080_30fps.mp4" },
     stats: { items: [{ value: "1993", label: "Depuis" }, { value: "100%", label: "Sur place" }, { value: "RBQ", label: "Licence" }] },
     carousel: { title: "En vedette", cards: [
       { kicker: "Projet", title: "Titre 1", text: "Courte description.", image: "https://images.unsplash.com/photo-1504307651254-35680f356dfd?auto=format&fit=crop&w=800&q=70" },
-      { kicker: "Projet", title: "Titre 2", text: "Courte description.", image: "https://images.unsplash.com/photo-1541888946425-d81bb19240f5?auto=format&fit=crop&w=800&q=70" },
-      { kicker: "Projet", title: "Titre 3", text: "Courte description.", image: "https://images.unsplash.com/photo-1581094794329-c8112a89af12?auto=format&fit=crop&w=800&q=70" }
+      { kicker: "Projet", title: "Titre 2", text: "Courte description.", image: "https://images.unsplash.com/photo-1541888946425-d81bb19240f5?auto=format&fit=crop&w=800&q=70" }
     ] },
     media: { title: "Médias", items: [
-      { kicker: "Vidéo", title: "Titre", image: "https://images.unsplash.com/photo-1503387762-592deb58ef4e?auto=format&fit=crop&w=800&q=70", video: "https://www.youtube.com/watch?v=zyYgDtY2AMY" }
+      { kicker: "", title: "Clique ici", image: "", video: "" }
     ] },
-    services: { title: "Services", items: [{ title: "Service", text: "Description courte." }, { title: "Service", text: "Description courte." }, { title: "Service", text: "Description courte." }] },
-    about: { title: "À propos", text: "Présentez l'entreprise.", image: "https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&w=1200&q=80" },
-    video: { title: "Vidéo", url: "https://www.youtube.com/watch?v=zyYgDtY2AMY" },
-    gallery: { title: "Galerie", images: ["https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=800&q=70", "https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&w=800&q=70", "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=800&q=70"] },
+    services: { title: "Services", items: [{ title: "Service", text: "Description courte." }] },
+    about: { title: "À propos", text: "Présentez l'entreprise.", image: "" },
+    video: { title: "Vidéo", url: "" },
+    gallery: { title: "Galerie", images: [] },
     quotes: { title: "Ce qu'on dit de nous", items: [
-      { text: "Travail propre, délais respectés.", name: "Client" },
-      { text: "Devis clair, équipe à l'écoute.", name: "Cliente" }
+      { text: "Travail propre, délais respectés.", name: "Client" }
     ] },
     faq: { title: "Questions fréquentes", items: [
-      { q: "Est-ce que l'estimation est gratuite ?", a: "Oui. On se déplace pour voir le chantier." },
-      { q: "Quelle est la zone desservie ?", a: "Indiquez les villes ici." }
+      { q: "Est-ce que l'estimation est gratuite ?", a: "Oui. On se déplace pour voir le chantier." }
     ] },
     logos: { title: "Partenaires", items: [
-      { label: "APCHQ", image: "" },
-      { label: "RBQ", image: "" }
+      { label: "Nom", image: "" }
     ] },
     hours: { title: "Heures", items: [
-      { day: "Lundi – Vendredi", time: "8 h – 18 h" },
-      { day: "Samedi", time: "Sur rendez-vous" },
-      { day: "Dimanche", time: "Fermé" }
+      { day: "Lundi – Vendredi", time: "8 h – 18 h" }
     ] },
     form: { title: "Écrivez-nous", button: "Envoyer", mailto: "" },
     map: { title: "Nous trouver", query: "14 rue Drummond, Granby, Québec" },

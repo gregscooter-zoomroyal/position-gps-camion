@@ -2,12 +2,12 @@
   const AUTH_KEY = "atelier-auth-v1";
   const DATA_KEY = "atelier-sites-v2";
   const DATA_KEY_OLD = "atelier-sites-v1";
-  const APP_VERSION = "22";
+  const APP_VERSION = "23";
   const SHARED_KEYS = ["cursor"];
   const SERVER_LOCK = new Set(["site-pavage-go"]);
-  const PAVAGE_LOGO = "assets/logo-pavage-go.png?v=22";
-  const PAVAGE_ASPHALT = "assets/asphalte-bande.jpg?v=22";
-  const DOCK_TYPES = new Set(["services", "about", "contact", "carousel", "media", "video", "gallery", "faq", "quotes", "hours", "form", "map", "logos"]);
+  const PAVAGE_LOGO = "";
+  const PAVAGE_ASPHALT = "assets/asphalte-bande.jpg?v=23";
+  const DOCK_TYPES = new Set(["text", "logo", "services", "about", "contact", "carousel", "media", "video", "gallery", "faq", "quotes", "hours", "form", "map", "logos"]);
   const $ = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 
@@ -202,8 +202,8 @@
       (site.pages || []).forEach(p => {
         (p.sections || []).forEach(s => {
           if (!s.data) return;
-          if ((s.type === "nav" || s.type === "hero") && (!s.data.logo || (String(s.data.logo).includes("logo-pavage-go") && !String(s.data.logo).startsWith("idb:")))) {
-            s.data.logo = PAVAGE_LOGO;
+          if ((s.type === "nav" || s.type === "hero") && String(s.data.logo || "").includes("logo-pavage-go") && !String(s.data.logo).startsWith("idb:")) {
+            s.data.logo = "";
           }
         });
       });
@@ -324,28 +324,49 @@
     return `<img${cls} alt="" src="${esc(src)}">`;
   }
 
-  function heroLogoSrc(d, site) {
+  function hasPath(obj, path) {
+    if (!obj) return false;
+    const parts = String(path || "").split(".");
+    let cur = obj;
+    for (const p of parts) {
+      if (cur == null || !Object.prototype.hasOwnProperty.call(cur, p)) return false;
+      cur = cur[p];
+    }
+    return true;
+  }
+
+  function logoSlot(sec, d, editable, kind) {
+    const src = (kind === "block" ? d.image : d.logo) || "";
+    const cls = kind === "hero" ? "hero-mark" : "";
+    if (src) {
+      const img = imgTag(src, cls);
+      if (!editable) return kind === "hero" ? img : `<div class="logo-slot has-logo">${img}</div>`;
+      return `<div class="logo-slot has-logo" data-upload-logo="${sec.id}">${img}<button class="video-replace" type="button" data-upload-logo="${sec.id}">Changer le logo</button></div>`;
+    }
+    if (!editable) return "";
+    return `<div class="logo-slot logo-drop ${kind === "hero" ? "logo-hero" : ""}" data-upload-logo="${sec.id}"><div class="media-drop-label">Clique ou glisse<br>ton logo</div></div>`;
+  }
+
+  function heroLogoSrc(d) {
     if (d && d.logo) return d.logo;
-    if (d && d.image && isLocalRef(d.image)) return d.image;
-    const nav = ((site && site.pages) || []).flatMap(p => p.sections || []).find(s => s.type === "nav");
-    if (nav && nav.data && nav.data.logo) return nav.data.logo;
-    if (site && site.id === "site-pavage-go") return PAVAGE_LOGO;
     return "";
   }
 
-  function heroCopy(sec, d, f, editable, markHtml = "") {
-    const btn = f("cta", d.cta);
-    const href = (d.href || "").trim();
-    const inner = href && !editable
-      ? `<a class="s-btn" href="${esc(href)}">${btn}</a>`
-      : `<span class="s-btn">${btn}</span>`;
-    return `<div class="copy">
-      ${markHtml}
-      <div class="kicker">${f("kicker", d.kicker)}</div>
-      ${f("title", d.title, "h2")}
-      ${f("subtitle", d.subtitle, "p")}
-      ${inner}
-    </div>`;
+  function heroCopy(sec, d, f, editable, extraHtml = "") {
+    const bits = [];
+    if (extraHtml) bits.push(extraHtml);
+    if (hasPath(d, "kicker")) bits.push(`<div class="kicker">${f("kicker", d.kicker)}</div>`);
+    if (hasPath(d, "title")) bits.push(f("title", d.title, "h2"));
+    if (hasPath(d, "subtitle")) bits.push(f("subtitle", d.subtitle, "p"));
+    if (hasPath(d, "cta")) {
+      const btn = f("cta", d.cta);
+      const href = (d.href || "").trim();
+      const inner = href && !editable
+        ? `<a class="s-btn" href="${esc(href)}">${btn}</a>`
+        : `<span class="s-btn">${btn}</span>`;
+      bits.push(inner);
+    }
+    return `<div class="copy">${bits.join("")}</div>`;
   }
 
   function esc(s) {
@@ -353,6 +374,7 @@
   }
 
   function field(sec, path, text, tag = "span") {
+    if (!hasPath(sec.data, path) && path.indexOf(".") < 0) return "";
     return `<${tag} class="editable" contenteditable="true" data-sec="${sec.id}" data-path="${path}">${esc(text)}</${tag}>`;
   }
 
@@ -361,15 +383,16 @@
   }
 
   function navMarkup(sec, d, f, editable, site, preview) {
-    const src = d.logo || (site && site.id === "site-pavage-go" ? PAVAGE_LOGO : "");
-    const logo = imgTag(src, "");
-    const brand = `<div class="brand-wrap">${logo}${f("brand", d.brand, "span")}</div>`;
+    const logo = logoSlot(sec, d, editable, "nav");
+    const brandTxt = hasPath(d, "brand") ? f("brand", d.brand, "span") : "";
+    const brand = `<div class="brand-wrap">${logo}${brandTxt}</div>`;
     if (editable) {
-      return `<div class="s-nav">${brand}<div class="links">${f("links", d.links, "span")}</div></div>`;
+      const links = hasPath(d, "links") ? `<div class="links">${f("links", d.links, "span")}</div>` : "";
+      return `<div class="s-nav">${brand}${links}</div>`;
     }
     const base = viewBase(site, preview);
     const viewing = state.viewPageId || (site.pages[0] && site.pages[0].id);
-    const links = String(d.links || "").split(",").map(raw => {
+    const links = hasPath(d, "links") ? String(d.links || "").split(",").map(raw => {
       const name = raw.trim();
       if (!name) return "";
       const page = (site.pages || []).find(p => p.name.toLowerCase() === name.toLowerCase());
@@ -378,13 +401,18 @@
         return `<a href="${href}">${esc(name)}</a>`;
       }
       return `<span>${esc(name)}</span>`;
-    }).join("");
+    }).join("") : "";
     return `<div class="s-nav">${brand}<div class="links">${links}</div></div>`;
   }
 
   function renderSection(sec, editable, site, preview) {
     const d = sec.data || {};
-    const f = (path, text, tag) => editable ? field(sec, path, text, tag) : `<${tag || "span"}>${esc(text)}</${tag || "span"}>`;
+    const f = (path, text, tag) => {
+      if (!hasPath(d, path) && path.indexOf(".") < 0) return "";
+      if (editable) return field(sec, path, text, tag);
+      if (!String(text ?? "").trim()) return "";
+      return `<${tag || "span"}>${esc(text)}</${tag || "span"}>`;
+    };
     if (sec.type === "nav") return navMarkup(sec, d, f, editable, site, preview);
     if (sec.type === "hero") {
       const hasVid = !!d.video;
@@ -392,23 +420,29 @@
       const bg = hasVid
         ? `<div class="hero-media">${parseVideoBg(d.video)}</div>`
         : (hasPhoto ? `<div class="hero-media">${imgTag(d.image, "hero-photo")}</div>` : "");
-      const markSrc = heroLogoSrc(d, site);
-      const mark = imgTag(markSrc, "hero-mark");
+      const mark = logoSlot(sec, d, editable, "hero");
       const onCanvas = !hasVid && !hasPhoto;
       const pickHero = editable ? ` data-upload-hero="${sec.id}"` : "";
       const addBtn = editable
         ? `<button class="video-replace" type="button" data-upload-hero="${sec.id}">Photo ou MP4</button>`
         : "";
-      return `<div class="s-hero ${hasVid ? "has-video" : ""} ${hasPhoto ? "has-photo" : ""} ${onCanvas ? "on-canvas" : ""} ${markSrc ? "has-mark" : ""}"${pickHero}>
+      return `<div class="s-hero ${hasVid ? "has-video" : ""} ${hasPhoto ? "has-photo" : ""} ${onCanvas ? "on-canvas" : ""} ${d.logo ? "has-mark" : ""}"${pickHero}>
         ${bg}
         ${mark}
         ${addBtn}
         ${heroCopy(sec, d, f, editable)}
       </div>`;
     }
+    if (sec.type === "logo") {
+      const drop = logoSlot(sec, d, editable, "block");
+      const cap = hasPath(d, "caption") ? f("caption", d.caption, "p") : "";
+      return `<div class="s-logo pad">${drop}${cap}</div>`;
+    }
+    if (sec.type === "text") {
+      return `<div class="s-text pad">${hasPath(d, "title") ? f("title", d.title, "h3") : ""}${hasPath(d, "text") ? f("text", d.text, "p") : ""}</div>`;
+    }
     if (sec.type === "video-bg") {
-      const markSrc = heroLogoSrc(d, site);
-      const mark = imgTag(markSrc, "hero-mark");
+      const mark = d.logo ? imgTag(d.logo, "hero-mark") : "";
       return `<div class="s-hero s-video-bg has-video">
         <div class="hero-media">${parseVideoBg(d.video)}</div>
         <div class="shade"></div>
@@ -610,7 +644,7 @@
         const url = 'url("' + PAVAGE_ASPHALT + '")';
         el.style.color = "#f3f3f1";
         el.style.removeProperty("background");
-        el.style.setProperty("background-color", "#3a3a3a", "important");
+        el.style.setProperty("background-color", "#111111", "important");
         el.style.setProperty("background-image", url, "important");
         el.style.setProperty("background-repeat", "repeat", "important");
         el.style.setProperty("background-size", "420px 420px", "important");
@@ -748,6 +782,7 @@
           <button type="button" data-dup-sec="${s.id}" title="Dupliquer">⧉</button>
           <button type="button" data-up="${s.id}">↑</button>
           <button type="button" data-down="${s.id}">↓</button>
+          <button type="button" data-del-sec-quick="${s.id}" title="Retirer">✕</button>
         </span>
       </div>`;
     }).join("");
@@ -819,57 +854,76 @@
       ["original", "Original"], ["rounded", "Arrondi"], ["circle", "Cercle"], ["square", "Carré"]
     ]);
     const d = sec.data;
-    const labels = {
-      video: "URL vidéo de fond (YouTube, Vimeo ou MP4)",
-      image: "Image de couverture",
-      url: "URL vidéo",
-      kicker: "Petite ligne au-dessus",
-      title: "Titre",
-      subtitle: "Texte",
-      cta: "Bouton",
-      text: "Texte",
-      brand: "Nom",
-      links: "Liens (séparés par des virgules)",
-      address: "Adresse",
-      phone: "Téléphone",
-      email: "Courriel / note",
-      note: "Note",
-      button: "Bouton",
-      href: "Lien du bouton (tel: ou https://)",
-      logo: "Logo (derrière le titre)",
-      mailto: "Courriel de réception du formulaire",
-      query: "Adresse pour la carte"
-    };
-    Object.keys(d).forEach(k => {
-      if (k === "items" || k === "cards" || k === "stats") {
-        (d[k] || []).forEach((it, i) => {
-          Object.keys(it).forEach(ik => {
-            const ikLabels = { q: "Question", a: "Réponse", day: "Jour", time: "Heures", name: "Nom", label: "Nom", image: "Image", video: "Vidéo", text: "Texte", title: "Titre", value: "Valeur", kicker: "Ligne" };
-            const lab = `${k === "cards" ? "Carte" : k === "stats" ? "Chiffre" : "Item"} ${i + 1} — ${ikLabels[ik] || ik}`;
-            const val = it[ik];
-            const area = String(val).length > 50 || ik === "text" || ik === "video";
-            html += `<label>${esc(lab)}</label>`;
-            html += area
-              ? `<textarea data-d="${k}.${i}.${ik}">${esc(val)}</textarea>`
-              : `<input data-d="${k}.${i}.${ik}" value="${esc(val)}">`;
-            if (ik === "video" || ik === "image") {
-              html += `<button class="btn btn-ghost btn-wide" type="button" data-pick="${k}.${i}.${ik}">Choisir un fichier sur cet ordinateur</button>`;
-            }
-          });
-        });
-      } else if (k === "images") {
-        html += `<label>Images (une URL par ligne)</label><textarea data-d="images">${esc(d.images.join("\n"))}</textarea>`;
-      } else {
-        const area = String(d[k]).length > 60 || k === "text" || k === "url" || k === "video";
-        html += `<label>${labels[k] || k}</label>`;
+    const slots = (typeof TEXT_SLOTS !== "undefined" && TEXT_SLOTS[sec.type]) || [];
+    if (slots.length) {
+      html += `<h4>Textes</h4>`;
+      html += `<p style="color:var(--muted);font-size:12px;margin:0 0 10px">Ajoute ou retire les emplacements de texte de ce bloc.</p>`;
+      slots.forEach(([key, label]) => {
+        if (!hasPath(d, key)) return;
+        const area = String(d[key] || "").length > 60 || key === "text" || key === "subtitle";
+        html += `<div class="field-row"><label>${esc(label)}</label><button class="btn-mini" type="button" data-drop-field="${key}">Retirer</button></div>`;
         html += area
-          ? `<textarea data-d="${k}">${esc(d[k])}</textarea>`
-          : `<input data-d="${k}" value="${esc(d[k])}">`;
-        if (k === "video" || k === "url" || k === "image" || k === "logo") {
-          html += `<button class="btn btn-ghost btn-wide" type="button" data-pick="${k}">Choisir un fichier sur cet ordinateur</button>`;
+          ? `<textarea data-d="${key}">${esc(d[key])}</textarea>`
+          : `<input data-d="${key}" value="${esc(d[key])}">`;
+      });
+      const missing = slots.filter(([key]) => !hasPath(d, key));
+      if (missing.length) {
+        html += `<label>Ajouter un texte</label><div class="chip-row">`;
+        missing.forEach(([key, label]) => {
+          html += `<button type="button" class="chip" data-add-field="${key}">+ ${esc(label)}</button>`;
+        });
+        html += `</div>`;
+      }
+    }
+    if (sec.type === "nav" || sec.type === "hero" || sec.type === "logo") {
+      html += `<h4>Logo</h4>`;
+      html += `<button class="btn btn-ghost btn-wide" type="button" data-upload-logo="${sec.id}">Choisir le logo sur cet ordinateur</button>`;
+      if ((sec.type === "logo" ? d.image : d.logo)) {
+        html += `<button class="btn btn-danger btn-wide" type="button" data-clear-logo="${sec.id}">Retirer le logo</button>`;
+      }
+    }
+    const itemTpl = typeof ITEM_TEMPLATES !== "undefined" ? ITEM_TEMPLATES[sec.type] : null;
+    if (itemTpl) {
+      const arr = d[itemTpl.key] || [];
+      html += `<h4>Lignes</h4>`;
+      arr.forEach((it, i) => {
+        html += `<div class="field-row"><label>Ligne ${i + 1}</label><button class="btn-mini" type="button" data-del-item="${i}">Retirer</button></div>`;
+        Object.keys(it).forEach(ik => {
+          const ikLabels = { q: "Question", a: "Réponse", day: "Jour", time: "Heures", name: "Nom", label: "Nom", image: "Image", video: "Vidéo", text: "Texte", title: "Titre", value: "Valeur", kicker: "Ligne" };
+          const val = it[ik];
+          const area = String(val).length > 50 || ik === "text" || ik === "video" || ik === "a";
+          html += `<label>${esc(ikLabels[ik] || ik)}</label>`;
+          html += area
+            ? `<textarea data-d="${itemTpl.key}.${i}.${ik}">${esc(val)}</textarea>`
+            : `<input data-d="${itemTpl.key}.${i}.${ik}" value="${esc(val)}">`;
+          if (ik === "video" || ik === "image") {
+            html += `<button class="btn btn-ghost btn-wide" type="button" data-pick="${itemTpl.key}.${i}.${ik}">Choisir un fichier</button>`;
+          }
+        });
+      });
+      html += `<button class="btn btn-ghost btn-wide" type="button" data-add-item="1">+ Ajouter une ligne</button>`;
+    }
+    if (hasPath(d, "images")) {
+      html += `<label>Images (une URL par ligne)</label><textarea data-d="images">${esc((d.images || []).join("\n"))}</textarea>`;
+    }
+    ["href", "video", "url", "image", "mailto", "query"].forEach(k => {
+      if (!hasPath(d, k) || k === "image" && (sec.type === "logo" || sec.type === "hero" || sec.type === "about")) return;
+      if (slots.some(([key]) => key === k)) return;
+      if (k === "image" && sec.type === "about") {
+        html += `<button class="btn btn-ghost btn-wide" type="button" data-pick="image">Choisir la photo</button>`;
+        return;
+      }
+      if (k === "video" || k === "url" || k === "href" || k === "mailto" || k === "query") {
+        html += `<label>${k === "href" ? "Lien du bouton" : k === "mailto" ? "Courriel de réception" : k === "query" ? "Adresse pour la carte" : k === "url" ? "URL vidéo" : "URL vidéo de fond"}</label>`;
+        html += `<input data-d="${k}" value="${esc(d[k])}">`;
+        if (k === "video" || k === "url") {
+          html += `<button class="btn btn-ghost btn-wide" type="button" data-pick="${k}">Choisir un fichier</button>`;
         }
       }
     });
+    if (sec.type === "hero" || sec.type === "about") {
+      html += `<button class="btn btn-ghost btn-wide" type="button" data-pick="${sec.type === "hero" ? "image" : "image"}">Choisir une photo de fond</button>`;
+    }
     html += `<button class="btn btn-ghost btn-wide" type="button" id="dup-sec">Dupliquer ce bloc</button>`;
     html += `<button class="btn btn-danger btn-wide" type="button" id="del-sec">Retirer ce bloc</button>`;
     box.innerHTML = html;
@@ -908,11 +962,6 @@
     }
     if (pic && path === "logo") {
       sec.data.logo = ref;
-      if (sec.type === "hero") sec.data.image = sec.data.image || "";
-      if (sec.type === "nav") {
-        const hero = currentPage().sections.find(s => s.type === "hero");
-        if (hero && hero.data) hero.data.logo = ref;
-      }
       return;
     }
     if (sec.type === "hero" && (path === "image" || path === "video")) {
@@ -942,7 +991,7 @@
     uploadTarget = target;
     const input = $("#file-media");
     if (!input) return;
-    const logoOnly = target.path && /(^|\.)logo$/.test(String(target.path));
+    const logoOnly = !!(target.logo) || (target.path && /(^|\.)logo$/.test(String(target.path)));
     const photoOnly = !!(target.about || target.carousel || target.gallery) ||
       /^cards\.\d+\.image$/.test(String(target.path || ""));
     input.accept = (logoOnly || photoOnly)
@@ -998,6 +1047,16 @@
           block.data.video = ref;
           block.data.image = "";
         }
+      }
+    } else if (uploadTarget.logo) {
+      if (!pic) {
+        alert("Le logo doit être une image (JPG, PNG ou WebP).");
+        return;
+      }
+      const block = currentPage().sections.find(s => s.id === uploadTarget.logo);
+      if (block) {
+        if (block.type === "logo") block.data.image = ref;
+        else block.data.logo = ref;
       }
     } else if (uploadTarget.about) {
       if (!pic) {
@@ -1092,7 +1151,7 @@
     document.addEventListener("pointerdown", (e) => {
       if (e.button !== 0) return;
       if (!$("#screen-editor") || !$("#screen-editor").classList.contains("on")) return;
-      if (e.target.closest("a,button,input,textarea,select,summary,.editable,[contenteditable],[data-upload],[data-upload-url],[data-upload-about],[data-upload-car],[data-upload-gal],video,iframe,.car-btn,.car-track")) return;
+      if (e.target.closest("a,button,input,textarea,select,summary,.editable,[contenteditable],[data-upload],[data-upload-url],[data-upload-about],[data-upload-car],[data-upload-gal],[data-upload-logo],video,iframe,.car-btn,.car-track")) return;
       const sec = e.target.closest("#canvas .sec");
       if (!sec || !sec.dataset.id) return;
       const r = sec.getBoundingClientRect();
@@ -1284,8 +1343,13 @@
         return;
       }
       const upHero = e.target.closest("[data-upload-hero]");
-      if (upHero && !canvasDrag.moved && !e.target.closest(".editable") && !e.target.closest(".copy")) {
+      if (upHero && !canvasDrag.moved && !e.target.closest(".editable") && !e.target.closest(".copy") && !e.target.closest("[data-upload-logo]")) {
         startPick({ hero: upHero.dataset.uploadHero });
+        return;
+      }
+      const upLogo = e.target.closest("[data-upload-logo]");
+      if (upLogo && !canvasDrag.moved) {
+        startPick({ logo: upLogo.dataset.uploadLogo });
         return;
       }
       const upAbout = e.target.closest("[data-upload-about]");
@@ -1383,6 +1447,16 @@
           renderEditor();
         }
       }
+      const delQuick = e.target.closest("[data-del-sec-quick]");
+      if (delQuick && state.current) {
+        snapshot();
+        const id = delQuick.dataset.delSecQuick;
+        currentPage().sections = currentPage().sections.filter(s => s.id !== id);
+        if (state.selected === id) state.selected = null;
+        persistSite();
+        renderEditor();
+        return;
+      }
       const dupSecBtn = e.target.closest("[data-dup-sec]");
       if (dupSecBtn && state.current) {
         snapshot();
@@ -1420,10 +1494,64 @@
         snapshot();
         const arr = currentPage().sections;
         const at = Math.max(0, arr.length - 1);
-        arr.splice(at, 0, blankSection(addt.dataset.addType, state.current.name));
+        const neu = blankSection(addt.dataset.addType, state.current.name);
+        arr.splice(at, 0, neu);
+        state.selected = neu.id;
         persistSite();
         $("#modal-sec").classList.remove("on");
         renderEditor();
+        return;
+      }
+      const addField = e.target.closest("[data-add-field]");
+      if (addField && currentSection()) {
+        snapshot();
+        currentSection().data[addField.dataset.addField] = "";
+        persistSite();
+        renderEditor();
+        return;
+      }
+      const dropField = e.target.closest("[data-drop-field]");
+      if (dropField && currentSection()) {
+        snapshot();
+        delete currentSection().data[dropField.dataset.dropField];
+        persistSite();
+        renderEditor();
+        return;
+      }
+      const addItem = e.target.closest("[data-add-item]");
+      if (addItem && currentSection()) {
+        const tpl = ITEM_TEMPLATES[currentSection().type];
+        if (tpl) {
+          snapshot();
+          if (!Array.isArray(currentSection().data[tpl.key])) currentSection().data[tpl.key] = [];
+          currentSection().data[tpl.key].push(tpl.blank());
+          persistSite();
+          renderEditor();
+        }
+        return;
+      }
+      const delItem = e.target.closest("[data-del-item]");
+      if (delItem && currentSection()) {
+        const tpl = ITEM_TEMPLATES[currentSection().type];
+        if (tpl && Array.isArray(currentSection().data[tpl.key])) {
+          snapshot();
+          currentSection().data[tpl.key].splice(Number(delItem.dataset.delItem), 1);
+          persistSite();
+          renderEditor();
+        }
+        return;
+      }
+      const clearLogo = e.target.closest("[data-clear-logo]");
+      if (clearLogo && state.current) {
+        const block = currentPage().sections.find(s => s.id === clearLogo.dataset.clearLogo);
+        if (block) {
+          snapshot();
+          if (block.type === "logo") block.data.image = "";
+          else block.data.logo = "";
+          persistSite();
+          renderEditor();
+        }
+        return;
       }
       if (e.target.id === "btn-desktop") { state.device = "desktop"; renderEditor(); }
       if (e.target.id === "btn-mobile") { state.device = "mobile"; renderEditor(); }
@@ -1506,7 +1634,7 @@
     });
     document.addEventListener("dragover", (e) => {
       if (!$("#screen-editor") || !$("#screen-editor").classList.contains("on")) return;
-      const zone = e.target.closest("[data-upload],[data-upload-url],[data-upload-hero],[data-upload-about],[data-upload-car],[data-upload-gal]");
+      const zone = e.target.closest("[data-upload],[data-upload-url],[data-upload-hero],[data-upload-about],[data-upload-car],[data-upload-gal],[data-upload-logo]");
       if (zone) {
         e.preventDefault();
         e.dataTransfer.dropEffect = "copy";
@@ -1514,7 +1642,7 @@
       }
     });
     document.addEventListener("dragleave", (e) => {
-      const zone = e.target.closest("[data-upload],[data-upload-url],[data-upload-hero],[data-upload-about],[data-upload-car],[data-upload-gal]");
+      const zone = e.target.closest("[data-upload],[data-upload-url],[data-upload-hero],[data-upload-about],[data-upload-car],[data-upload-gal],[data-upload-logo]");
       if (zone && !zone.contains(e.relatedTarget)) zone.classList.remove("drop-hover");
     });
     document.addEventListener("drop", async (e) => {
@@ -1522,14 +1650,17 @@
       const card = e.target.closest("[data-upload]");
       const urlBox = e.target.closest("[data-upload-url]");
       const hero = e.target.closest("[data-upload-hero]");
+      const logoBox = e.target.closest("[data-upload-logo]");
       const about = e.target.closest("[data-upload-about]");
       const car = e.target.closest("[data-upload-car]");
       const gal = e.target.closest("[data-upload-gal]");
-      if (!card && !urlBox && !hero && !about && !car && !gal) return;
+      if (!card && !urlBox && !hero && !logoBox && !about && !car && !gal) return;
       e.preventDefault();
       const file = e.dataTransfer.files && e.dataTransfer.files[0];
       if (!file) return;
-      if (card) {
+      if (logoBox) {
+        uploadTarget = { logo: logoBox.dataset.uploadLogo };
+      } else if (card) {
         const parts = card.dataset.upload.split(":");
         uploadTarget = { media: [parts[0], Number(parts[1])] };
       } else if (urlBox) {
@@ -1616,7 +1747,7 @@
       if (e.target.id === "theme-texture") {
         snapshot();
         if (e.target.checked) {
-          state.current.theme.bgImage = state.current.theme.texture || "assets/asphalte.jpg";
+          state.current.theme.bgImage = state.current.theme.texture || PAVAGE_ASPHALT;
         } else {
           if (state.current.theme.bgImage) state.current.theme.texture = state.current.theme.bgImage;
           state.current.theme.bgImage = "";
