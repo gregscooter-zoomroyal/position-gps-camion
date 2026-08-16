@@ -2,7 +2,7 @@
   const AUTH_KEY = "atelier-auth-v1";
   const DATA_KEY = "atelier-sites-v2";
   const DATA_KEY_OLD = "atelier-sites-v1";
-  const APP_VERSION = "24";
+  const APP_VERSION = "25";
   const SHARED_KEYS = ["cursor"];
   const SERVER_LOCK = new Set(["site-pavage-go"]);
   const PAVAGE_LOGO = "";
@@ -15,6 +15,7 @@
     sites: loadSites(),
     current: null,
     selected: null,
+    picked: null,
     pageId: null,
     device: "desktop",
     tpl: "generic"
@@ -38,6 +39,116 @@
     const t = String((file && file.type) || "").toLowerCase();
     const n = String((file && file.name) || "").toLowerCase();
     return t.startsWith("image/") || /\.(jpe?g|png|gif|webp|avif|heic|bmp)$/.test(n);
+  }
+
+  function clamp(n, a, b) {
+    return Math.max(a, Math.min(b, Number(n) || 0));
+  }
+
+  function isPicked(sec, kind, index) {
+    if (!sec || state.selected !== sec.id) return false;
+    const p = state.picked || { kind: "sec" };
+    if (p.kind !== kind) return false;
+    if (kind === "item" || kind === "card" || kind === "gal") {
+      return Number(p.index) === Number(index);
+    }
+    return true;
+  }
+
+  function frameOf(sec, kind, index) {
+    if (!sec) return {};
+    if (kind === "sec") return sec.size || {};
+    if (kind === "banner") return { h: sec.data && sec.data.heroH };
+    if (kind === "logo" && (sec.type === "nav" || sec.type === "hero")) return (sec.data && sec.data.logoSize) || {};
+    if (kind === "logo" || kind === "video" || kind === "about") return (sec.data && sec.data.size) || {};
+    if (kind === "item") return (((sec.data || {}).items || [])[index] || {}).size || {};
+    if (kind === "card") return (((sec.data || {}).cards || [])[index] || {}).size || {};
+    if (kind === "gal") return ((sec.data && sec.data.frames) || [])[index] || {};
+    return {};
+  }
+
+  function writeFrame(sec, kind, index, patch) {
+    if (!sec || !patch) return;
+    if (kind === "sec") {
+      if (!sec.size) sec.size = {};
+      if (patch.w != null) sec.size.w = Math.round(clamp(patch.w, 20, 100));
+      return;
+    }
+    if (kind === "banner") {
+      if (!sec.data) sec.data = {};
+      if (patch.h != null) sec.data.heroH = Math.round(clamp(patch.h, 160, 900));
+      return;
+    }
+    let obj = null;
+    if (kind === "logo" && (sec.type === "nav" || sec.type === "hero")) {
+      if (!sec.data.logoSize) sec.data.logoSize = {};
+      obj = sec.data.logoSize;
+    } else if (kind === "logo" || kind === "video" || kind === "about") {
+      if (!sec.data.size) sec.data.size = {};
+      obj = sec.data.size;
+    } else if (kind === "item") {
+      const it = (sec.data.items || [])[index];
+      if (!it) return;
+      if (!it.size) it.size = {};
+      obj = it.size;
+    } else if (kind === "card") {
+      const it = (sec.data.cards || [])[index];
+      if (!it) return;
+      if (!it.size) it.size = {};
+      obj = it.size;
+    } else if (kind === "gal") {
+      if (!Array.isArray(sec.data.frames)) sec.data.frames = [];
+      if (!sec.data.frames[index]) sec.data.frames[index] = {};
+      obj = sec.data.frames[index];
+    }
+    if (!obj) return;
+    if (patch.w != null) obj.w = Math.round(clamp(patch.w, 32, 960));
+    if (patch.h != null) obj.h = Math.round(clamp(patch.h, 32, 900));
+    if (patch.align) obj.align = patch.align;
+  }
+
+  function clearFrame(sec, kind, index) {
+    if (!sec) return;
+    if (kind === "sec") { delete sec.size; return; }
+    if (kind === "banner") { delete sec.data.heroH; return; }
+    if (kind === "logo" && (sec.type === "nav" || sec.type === "hero")) { delete sec.data.logoSize; return; }
+    if (kind === "logo" || kind === "video" || kind === "about") { delete sec.data.size; return; }
+    if (kind === "item" && sec.data.items && sec.data.items[index]) delete sec.data.items[index].size;
+    if (kind === "card" && sec.data.cards && sec.data.cards[index]) delete sec.data.cards[index].size;
+    if (kind === "gal" && sec.data.frames) delete sec.data.frames[index];
+  }
+
+  function frameCss(size) {
+    if (!size) return "";
+    const parts = [];
+    if (size.w != null) parts.push("width:" + size.w + "px");
+    if (size.h != null) parts.push("height:" + size.h + "px");
+    return parts.join(";");
+  }
+
+  function alignClass(size) {
+    const a = size && size.align;
+    return a === "center" || a === "right" || a === "left" ? " box-align-" + a : "";
+  }
+
+  function handlesIf(sec, kind, index) {
+    if (!isPicked(sec, kind, index)) return "";
+    let dirs = ["nw", "n", "ne", "w", "e", "sw", "s", "se"];
+    if (kind === "sec") dirs = ["nw", "ne", "w", "e", "sw", "se"];
+    if (kind === "banner") dirs = ["s", "sw", "se"];
+    return `<span class="rz-box" aria-hidden="true">${dirs.map(d => `<i class="rz" data-rz="${d}"></i>`).join("")}</span>`;
+  }
+
+  function sizeOpen(sec, kind, index, classes, extra, style) {
+    const on = isPicked(sec, kind, index) ? " is-picked" : "";
+    const idx = (index == null || index === "") ? "" : ` data-size-index="${index}"`;
+    const st = style ? ` style="${style}"` : "";
+    const more = extra ? " " + extra : "";
+    return `<div class="size-box ${classes || ""}${on}${alignClass(frameOf(sec, kind, index))}" data-size-kind="${kind}"${idx}${more}${st}>`;
+  }
+
+  function pickBtn(attr, label) {
+    return `<button class="video-replace" type="button" ${attr}>${label}</button>`;
   }
 
   function idbKey(ref) {
@@ -153,7 +264,8 @@
     undoStack.push(JSON.stringify({
       site: state.current,
       pageId: state.pageId,
-      selected: state.selected
+      selected: state.selected,
+      picked: state.picked
     }));
     if (undoStack.length > 40) undoStack.shift();
   }
@@ -167,6 +279,7 @@
     state.current = data.site;
     state.pageId = data.pageId;
     state.selected = data.selected;
+    state.picked = data.picked || { kind: "sec" };
     saveSites();
     renderEditor();
   }
@@ -280,9 +393,9 @@
 
   function dropLabel(photoOnly) {
     if (photoOnly) {
-      return `<div class="media-drop-label">Clique ici ou glisse une photo<br><small>JPG, PNG ou WebP — même geste que pour les MP4</small></div>`;
+      return `<div class="media-drop-label">Glisse une photo ici<br><small>JPG, PNG ou WebP — ou le bouton Choisir</small></div>`;
     }
-    return `<div class="media-drop-label">Clique ici ou glisse une photo ou un MP4<br><small>Fichier sur ton ordinateur</small></div>`;
+    return `<div class="media-drop-label">Glisse une photo ou un MP4<br><small>ou le bouton Choisir</small></div>`;
   }
 
   function parseVideo(url) {
@@ -338,13 +451,18 @@
   function logoSlot(sec, d, editable, kind) {
     const src = (kind === "block" ? d.image : d.logo) || "";
     const cls = kind === "hero" ? "hero-mark" : "";
+    const size = frameOf(sec, "logo");
+    const style = frameCss(size);
+    const framed = size.w || size.h ? " is-framed" : "";
+    const open = sizeOpen(sec, "logo", null, "logo-slot" + framed + (src ? " has-logo" : " logo-drop") + (kind === "hero" && !src ? " logo-hero" : ""), editable ? `data-upload-logo="${sec.id}"` : "", style);
+    const close = `${handlesIf(sec, "logo")}</div>`;
     if (src) {
       const img = imgTag(src, cls);
-      if (!editable) return kind === "hero" ? img : `<div class="logo-slot has-logo">${img}</div>`;
-      return `<div class="logo-slot has-logo" data-upload-logo="${sec.id}">${img}<button class="video-replace" type="button" data-upload-logo="${sec.id}">Changer le logo</button></div>`;
+      if (!editable) return kind === "hero" ? open + img + "</div>" : open + img + "</div>";
+      return open + img + pickBtn(`data-upload-logo="${sec.id}"`, "Changer le logo") + close;
     }
     if (!editable) return "";
-    return `<div class="logo-slot logo-drop ${kind === "hero" ? "logo-hero" : ""}" data-upload-logo="${sec.id}"><div class="media-drop-label">Clique ou glisse<br>ton logo</div></div>`;
+    return open + `<div class="media-drop-label">Glisse<br>ton logo</div>` + pickBtn(`data-upload-logo="${sec.id}"`, "Choisir") + close;
   }
 
   function heroLogoSrc(d) {
@@ -424,13 +542,15 @@
       const onCanvas = !hasVid && !hasPhoto;
       const pickHero = editable ? ` data-upload-hero="${sec.id}"` : "";
       const addBtn = editable
-        ? `<button class="video-replace" type="button" data-upload-hero="${sec.id}">Photo ou MP4</button>`
+        ? pickBtn(`data-upload-hero="${sec.id}"`, "Photo ou MP4")
         : "";
-      return `<div class="s-hero ${hasVid ? "has-video" : ""} ${hasPhoto ? "has-photo" : ""} ${onCanvas ? "on-canvas" : ""} ${d.logo ? "has-mark" : ""}"${pickHero}>
+      const bannerStyle = d.heroH ? `min-height:${d.heroH}px` : "";
+      return `${sizeOpen(sec, "banner", null, `s-hero ${hasVid ? "has-video" : ""} ${hasPhoto ? "has-photo" : ""} ${onCanvas ? "on-canvas" : ""} ${d.logo ? "has-mark" : ""}`, pickHero.trim(), bannerStyle)}
         ${bg}
         ${mark}
         ${addBtn}
         ${heroCopy(sec, d, f, editable)}
+        ${handlesIf(sec, "banner")}
       </div>`;
     }
     if (sec.type === "logo") {
@@ -443,10 +563,12 @@
     }
     if (sec.type === "video-bg") {
       const mark = d.logo ? imgTag(d.logo, "hero-mark") : "";
-      return `<div class="s-hero s-video-bg has-video">
+      const bannerStyle = d.heroH ? `min-height:${d.heroH}px` : "";
+      return `${sizeOpen(sec, "banner", null, "s-hero s-video-bg has-video", "", bannerStyle)}
         <div class="hero-media">${parseVideoBg(d.video)}</div>
         <div class="shade"></div>
         ${heroCopy(sec, d, f, editable, mark)}
+        ${handlesIf(sec, "banner")}
       </div>`;
     }
     if (sec.type === "stats") {
@@ -457,19 +579,23 @@
     }
     if (sec.type === "carousel") {
       const cards = (d.cards || []).map((c, i) => {
-        const drop = editable ? ` data-upload-car="${sec.id}:${i}"` : "";
         const pic = c.image
           ? imgTag(c.image, "")
           : (editable ? dropLabel(true) : "");
+        const st = frameCss(c.size || {});
+        const framed = c.size && (c.size.w || c.size.h) ? " is-framed" : "";
+        const pick = editable ? pickBtn(`data-upload-car="${sec.id}:${i}"`, c.image ? "Changer" : "Choisir") : "";
         return `
-        <article class="car-card">
-          <div class="car-img ${editable ? "media-drop" : ""}"${drop}>${pic}</div>
+        ${sizeOpen(sec, "card", i, "car-card" + framed, editable ? `data-upload-car="${sec.id}:${i}"` : "", st)}
+          <div class="car-img ${editable && !c.image ? "media-drop" : ""}">${pic}</div>
           <div class="car-body">
             <div class="kicker">${f("cards." + i + ".kicker", c.kicker)}</div>
             <h4>${f("cards." + i + ".title", c.title, "span")}</h4>
             <p>${f("cards." + i + ".text", c.text)}</p>
           </div>
-        </article>`;
+          ${pick}
+          ${handlesIf(sec, "card", i)}
+        </div>`;
       }).join("");
       return `<div class="s-carousel pad">
         ${f("title", d.title, "h3")}
@@ -481,17 +607,23 @@
       </div>`;
     }
     if (sec.type === "media") {
+      const free = (d.items || []).some(it => it.size && (it.size.w || it.size.h || it.size.align));
       const cards = (d.items || []).map((it, i) => {
-        const uploadAttr = editable ? ` data-upload="${sec.id}:${i}"` : "";
         const empty = !it.video && !it.image;
-        if (editable && empty) {
-          return `<figure class="media-card media-drop"${uploadAttr}>
-            ${dropLabel()}
-            <figcaption>
+        const st = frameCss(it.size || {});
+        const framed = it.size && (it.size.w || it.size.h) ? " is-framed" : "";
+        const pick = editable ? pickBtn(`data-upload="${sec.id}:${i}"`, empty ? "Choisir" : "Remplacer") : "";
+        const cap = `<figcaption>
               <div class="kicker">${f("items." + i + ".kicker", it.kicker)}</div>
               <h4>${f("items." + i + ".title", it.title, "span")}</h4>
-            </figcaption>
-          </figure>`;
+            </figcaption>`;
+        if (editable && empty) {
+          return `${sizeOpen(sec, "item", i, "media-card media-drop" + framed, `data-upload="${sec.id}:${i}"`, st)}
+            ${dropLabel()}
+            ${pick}
+            ${cap}
+            ${handlesIf(sec, "item", i)}
+          </div>`;
         }
         const fileVid = !!it.video && isFileVideo(it.video);
         const thumb = it.video
@@ -499,19 +631,14 @@
             ? `<video ${loopAttrs()} ${isLocalRef(it.video) ? `data-media-src="${esc(it.video)}"` : `src="${esc(it.video)}"`}></video>`
             : parseVideo(it.video))
           : imgTag(it.image, "");
-        const replace = editable
-          ? `<button class="video-replace" type="button" data-upload="${sec.id}:${i}">Remplacer</button>`
-          : "";
-        return `<figure class="media-card media-loop"${uploadAttr}>
+        return `${sizeOpen(sec, "item", i, "media-card media-loop" + framed, editable ? `data-upload="${sec.id}:${i}"` : "", st)}
           ${thumb}
-          ${replace}
-          <figcaption>
-            <div class="kicker">${f("items." + i + ".kicker", it.kicker)}</div>
-            <h4>${f("items." + i + ".title", it.title, "span")}</h4>
-          </figcaption>
-        </figure>`;
+          ${pick}
+          ${cap}
+          ${handlesIf(sec, "item", i)}
+        </div>`;
       }).join("");
-      return `<div class="s-media pad">${f("title", d.title, "h3")}<div class="media-grid">${cards}</div></div>`;
+      return `<div class="s-media pad">${f("title", d.title, "h3")}<div class="media-grid${free ? " free-size" : ""}">${cards}</div></div>`;
     }
     if (sec.type === "services") {
       const items = (d.items || []).map((it, i) => `
@@ -523,34 +650,47 @@
         ? imgTag(d.image, "")
         : (editable ? dropLabel(true) : "");
       const drop = editable ? ` data-upload-about="${sec.id}"` : "";
+      const st = frameCss(d.size || {});
+      const framed = d.size && (d.size.w || d.size.h) ? " is-framed" : "";
+      const pick = editable ? pickBtn(`data-upload-about="${sec.id}"`, d.image ? "Changer" : "Choisir") : "";
       return `<div class="s-about pad"><div class="about-grid">
         <div>${f("title", d.title, "h3")}${f("text", d.text, "p")}</div>
-        <div class="about-photo ${editable ? "media-drop" : ""}"${drop}>${pic}</div>
+        ${sizeOpen(sec, "about", null, "about-photo" + framed + (editable && !d.image ? " media-drop" : ""), drop.trim(), st)}
+          ${pic}
+          ${pick}
+          ${handlesIf(sec, "about")}
+        </div>
       </div></div>`;
     }
     if (sec.type === "video") {
-      let box;
+      let inner;
       const hasImg = !!d.image && !d.url;
-      if (!editable) {
-        box = `<div class="video-box">${hasImg ? imgTag(d.image, "hero-photo") : parseVideo(d.url)}</div>`;
-      } else if (!d.url && !d.image) {
-        box = `<div class="video-box video-drop" data-upload-url="${sec.id}">${dropLabel()}</div>`;
+      const st = frameCss(d.size || {});
+      const framed = d.size && (d.size.w || d.size.h) ? " is-framed" : "";
+      if (!d.url && !d.image) {
+        inner = editable ? dropLabel() : parseVideo("");
       } else {
-        const inner = hasImg ? imgTag(d.image, "hero-photo") : parseVideo(d.url);
-        box = `<div class="video-box video-has">${inner}<button class="video-replace" type="button" data-upload-url="${sec.id}">Remplacer</button></div>`;
+        inner = hasImg ? imgTag(d.image, "hero-photo") : parseVideo(d.url);
       }
+      const pick = editable ? pickBtn(`data-upload-url="${sec.id}"`, (d.url || d.image) ? "Remplacer" : "Choisir") : "";
+      const box = `${sizeOpen(sec, "video", null, "video-box" + framed + (editable && !d.url && !d.image ? " video-drop" : " video-has"), editable ? `data-upload-url="${sec.id}"` : "", st)}${inner}${pick}${handlesIf(sec, "video")}</div>`;
       return `<div class="s-video pad">${f("title", d.title, "h3")}${box}</div>`;
     }
     if (sec.type === "gallery") {
+      const free = (d.frames || []).some(fr => fr && (fr.w || fr.h || fr.align));
       const imgs = (d.images || []).map((src, i) => {
         const tag = imgTag(src, "");
-        if (!editable) return tag;
-        return `<div class="gal-item" data-upload-gal="${sec.id}:${i}">${tag}</div>`;
+        const st = frameCss((d.frames && d.frames[i]) || {});
+        const framed = d.frames && d.frames[i] && (d.frames[i].w || d.frames[i].h) ? " is-framed" : "";
+        if (!editable) {
+          return `${sizeOpen(sec, "gal", i, "gal-item" + framed, "", st)}${tag}</div>`;
+        }
+        return `${sizeOpen(sec, "gal", i, "gal-item" + framed, editable ? `data-upload-gal="${sec.id}:${i}"` : "", st)}${tag}${pickBtn(`data-upload-gal="${sec.id}:${i}"`, "Changer")}${handlesIf(sec, "gal", i)}</div>`;
       }).join("");
       const add = editable
-        ? `<div class="gal-add media-drop" data-upload-gal="${sec.id}">${dropLabel(true)}</div>`
+        ? `<div class="gal-add media-drop" data-upload-gal="${sec.id}">${dropLabel(true)}${pickBtn(`data-upload-gal="${sec.id}"`, "Choisir")}</div>`
         : "";
-      return `<div class="s-gallery pad">${f("title", d.title, "h3")}<div class="gal">${imgs}${add}</div></div>`;
+      return `<div class="s-gallery pad">${f("title", d.title, "h3")}<div class="gal${free ? " free-size" : ""}">${imgs}${add}</div></div>`;
     }
     if (sec.type === "cta") {
       const href = (d.href || "").trim();
@@ -608,10 +748,14 @@
       </div>`;
     }
     if (sec.type === "logos") {
-      const items = (d.items || []).map((it, i) => it.image
-        ? imgTag(it.image, "")
-        : `<span class="logo-pill">${f("items." + i + ".label", it.label)}</span>`
-      ).join("");
+      const items = (d.items || []).map((it, i) => {
+        const st = frameCss(it.size || {});
+        const framed = it.size && (it.size.w || it.size.h) ? " is-framed" : "";
+        const inner = it.image
+          ? imgTag(it.image, "")
+          : `<span class="logo-pill">${f("items." + i + ".label", it.label)}</span>`;
+        return `${sizeOpen(sec, "item", i, "logo-chip" + framed, "", st)}${inner}${handlesIf(sec, "item", i)}</div>`;
+      }).join("");
       return `<div class="s-logos pad">${f("title", d.title, "h3")}<div class="logo-row">${items}</div></div>`;
     }
     return "";
@@ -669,7 +813,10 @@
       const align = sec.align || "left";
       const shape = sec.imageShape || "rounded";
       const dock = DOCK_TYPES.has(sec.type) ? " dockable" : "";
-      const wrap = `<div class="sec align-${align} img-${shape}${dock} ${state.selected === sec.id ? "sec-selected" : ""}" data-id="${sec.id}" data-type="${esc(sec.type)}">${renderSection(sec, editable, site, preview)}</div>`;
+      const boxW = DOCK_TYPES.has(sec.type) ? ((sec.size && sec.size.w) || 90) : null;
+      const style = boxW != null ? `width:${boxW}%` : "";
+      const on = isPicked(sec, "sec") ? " is-picked" : "";
+      const wrap = `<div class="sec size-box align-${align} img-${shape}${dock}${on} ${state.selected === sec.id ? "sec-selected" : ""}" data-id="${sec.id}" data-type="${esc(sec.type)}" data-size-kind="sec"${style ? ` style="${style}"` : ""}">${renderSection(sec, editable, site, preview)}${editable && DOCK_TYPES.has(sec.type) ? handlesIf(sec, "sec") : ""}</div>`;
       return wrap;
     }).join("");
   }
@@ -846,10 +993,29 @@
       return;
     }
     html += `<h4>Bloc</h4>`;
-    html += chipRow("Alignement", "data-align", sec.align || "left", [
+    const pickedKind = (state.picked && state.picked.kind) || "sec";
+    const pickedIndex = state.picked && state.picked.index;
+    const innerPick = pickedKind !== "sec" && pickedKind !== "banner";
+    const curAlign = innerPick
+      ? (frameOf(sec, pickedKind, pickedIndex).align || "left")
+      : (sec.align || "left");
+    html += chipRow(innerPick ? "Place ce carré" : "Alignement", innerPick ? "data-box-align" : "data-align", curAlign, [
       ["left", "Gauche"], ["center", "Centre"], ["right", "Droite"]
     ]);
-    html += `<p style="color:var(--muted);font-size:12px;margin:0 0 12px">Glisse le rectangle sur la page. Les lignes roses indiquent Gauche, Centre, Droite.</p>`;
+    html += `<p style="color:var(--muted);font-size:12px;margin:0 0 12px">${innerPick ? "Clique l'image, le logo, la vidéo ou le carré. Tire les coins roses. Gauche / Centre / Droite le place." : "Glisse le rectangle sur la page. Les lignes roses indiquent Gauche, Centre, Droite. Tire les coins pour la largeur."}</p>`;
+    if (pickedKind === "banner") {
+      const h = frameOf(sec, "banner").h || 480;
+      html += `<label>Hauteur du bandeau (${h} px)</label><input type="range" min="180" max="800" data-frame="h" value="${h}">`;
+    } else if (pickedKind === "sec" && DOCK_TYPES.has(sec.type)) {
+      const w = frameOf(sec, "sec").w || 90;
+      html += `<label>Largeur du bloc (${w} %)</label><input type="range" min="20" max="100" data-frame="w" value="${w}">`;
+    } else if (innerPick) {
+      const sz = frameOf(sec, pickedKind, pickedIndex);
+      html += `<h4>Dimensions</h4>`;
+      html += `<label>Largeur (${sz.w || "auto"} px)</label><input type="range" min="40" max="900" data-frame="w" value="${sz.w || 240}">`;
+      html += `<label>Hauteur (${sz.h || "auto"} px)</label><input type="range" min="40" max="800" data-frame="h" value="${sz.h || 180}">`;
+      html += `<button class="btn btn-ghost btn-wide" type="button" data-frame-reset="1">Taille d'origine</button>`;
+    }
     html += chipRow("Forme des images", "data-shape", sec.imageShape || "rounded", [
       ["original", "Original"], ["rounded", "Arrondi"], ["circle", "Cercle"], ["square", "Carré"]
     ]);
@@ -889,6 +1055,7 @@
       arr.forEach((it, i) => {
         html += `<div class="field-row"><label>Ligne ${i + 1}</label><button class="btn-mini" type="button" data-del-item="${i}">Retirer</button></div>`;
         Object.keys(it).forEach(ik => {
+          if (ik === "size" || ik === "align") return;
           const ikLabels = { q: "Question", a: "Réponse", day: "Jour", time: "Heures", name: "Nom", label: "Nom", image: "Image", video: "Vidéo", text: "Texte", title: "Titre", value: "Valeur", kicker: "Ligne" };
           const val = it[ik];
           const area = String(val).length > 50 || ik === "text" || ik === "video" || ik === "a";
@@ -1147,58 +1314,7 @@
       const d = $("#drop-line");
       if (d) d.classList.remove("on");
     };
-
-    document.addEventListener("pointerdown", (e) => {
-      if (e.button !== 0) return;
-      if (!$("#screen-editor") || !$("#screen-editor").classList.contains("on")) return;
-      if (e.target.closest("a,button,input,textarea,select,summary,.editable,[contenteditable],[data-upload],[data-upload-url],[data-upload-about],[data-upload-car],[data-upload-gal],[data-upload-logo],video,iframe,.car-btn,.car-track")) return;
-      const sec = e.target.closest("#canvas .sec");
-      if (!sec || !sec.dataset.id) return;
-      const r = sec.getBoundingClientRect();
-      job = {
-        id: sec.dataset.id,
-        el: sec,
-        startX: e.clientX,
-        startY: e.clientY,
-        origX: r.left,
-        origY: r.top,
-        origW: r.width,
-        origH: r.height,
-        align: (sec.className.match(/align-(left|center|right)/) || [,"left"])[1],
-        insertAt: null,
-        insertIds: null,
-        dy: 0
-      };
-      canvasDrag.moved = false;
-      canvasDrag.active = false;
-    });
-
-    document.addEventListener("pointermove", (e) => {
-      if (!job) return;
-      const dx0 = e.clientX - job.startX;
-      const dy0 = e.clientY - job.startY;
-      if (!canvasDrag.active) {
-        if (Math.hypot(dx0, dy0) < 8) return;
-        canvasDrag.active = true;
-        canvasDrag.moved = true;
-        snapshot();
-        state.selected = job.id;
-        job.el.classList.add("sec-selected", "sec-dragging");
-        const c = $("#canvas");
-        if (c) c.classList.add("is-dragging");
-        showGuides(true);
-        try { job.el.setPointerCapture(e.pointerId); } catch { /* ignore */ }
-      }
-      e.preventDefault();
-      const c = $("#canvas");
-      const wrap = $("#canvas-wrap");
-      if (!c || !wrap) return;
-      const cr = c.getBoundingClientRect();
-      const wr = wrap.getBoundingClientRect();
-      let useDx = dx0;
-      let useDy = dy0;
-      const left = job.origX + useDx;
-      const w = job.origW;
+    const snapName = (left, w, cr) => {
       const cx = left + w / 2;
       const right = left + w;
       const targets = [
@@ -1217,20 +1333,142 @@
           best = t;
         }
       }
+      let align;
+      let extra = 0;
       if (best && bestDist <= SNAP) {
         const val = best.edge === "left" ? left : best.edge === "right" ? right : cx;
-        useDx += (best.x - val);
-        job.align = best.name;
-        setGuide(best.name, true);
+        extra = best.x - val;
+        align = best.name;
+        setGuide(align, true);
       } else {
         const rel = (cx - cr.left) / Math.max(cr.width, 1);
-        job.align = rel < 0.38 ? "left" : rel > 0.62 ? "right" : "center";
-        setGuide(job.align, true);
+        align = rel < 0.38 ? "left" : rel > 0.62 ? "right" : "center";
+        setGuide(align, true);
       }
+      return { align, extra };
+    };
+
+    document.addEventListener("pointerdown", (e) => {
+      if (e.button !== 0) return;
+      if (!$("#screen-editor") || !$("#screen-editor").classList.contains("on")) return;
+      if (e.target.closest("a,button,input,textarea,select,summary,.editable,[contenteditable],iframe,.car-btn")) return;
+      const secEl = e.target.closest("#canvas .sec");
+      if (!secEl || !secEl.dataset.id) return;
+      const handle = e.target.closest("[data-rz]");
+      const box = handle ? handle.closest("[data-size-kind]") : e.target.closest("#canvas [data-size-kind]");
+      const r = (handle && box ? box : secEl).getBoundingClientRect();
+      canvasDrag.moved = false;
+      canvasDrag.active = false;
+      if (handle && box) {
+        job = {
+          mode: "resize",
+          id: secEl.dataset.id,
+          el: box,
+          secEl,
+          handle: handle.dataset.rz,
+          kind: box.dataset.sizeKind,
+          index: box.dataset.sizeIndex != null && box.dataset.sizeIndex !== "" ? Number(box.dataset.sizeIndex) : undefined,
+          startX: e.clientX,
+          startY: e.clientY,
+          origW: r.width,
+          origH: r.height,
+          ratio: r.width / Math.max(r.height, 1)
+        };
+        canvasDrag.active = true;
+        canvasDrag.moved = true;
+        snapshot();
+        state.selected = job.id;
+        state.picked = { kind: job.kind, index: job.index };
+        try { box.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+        e.preventDefault();
+        return;
+      }
+      const inner = box && box.dataset.sizeKind && box.dataset.sizeKind !== "sec" && box.dataset.sizeKind !== "banner";
+      job = {
+        mode: inner ? "item" : "move",
+        id: secEl.dataset.id,
+        el: inner ? box : secEl,
+        secEl,
+        kind: inner ? box.dataset.sizeKind : "sec",
+        index: inner && box.dataset.sizeIndex != null && box.dataset.sizeIndex !== "" ? Number(box.dataset.sizeIndex) : undefined,
+        startX: e.clientX,
+        startY: e.clientY,
+        origX: r.left,
+        origY: r.top,
+        origW: r.width,
+        origH: r.height,
+        align: inner
+          ? ((box.className.match(/box-align-(left|center|right)/) || [, "left"])[1])
+          : ((secEl.className.match(/align-(left|center|right)/) || [, "left"])[1]),
+        insertAt: null,
+        insertIds: null,
+        dy: 0
+      };
+    });
+
+    document.addEventListener("pointermove", (e) => {
+      if (!job) return;
+      const dx0 = e.clientX - job.startX;
+      const dy0 = e.clientY - job.startY;
+      if (job.mode === "resize") {
+        e.preventDefault();
+        const c = $("#canvas");
+        if (!c) return;
+        const cr = c.getBoundingClientRect();
+        const h = job.handle;
+        const signW = /e/.test(h) ? 1 : /w/.test(h) ? -1 : 0;
+        const signH = /s/.test(h) ? 1 : /n/.test(h) ? -1 : 0;
+        let newW = job.origW + dx0 * signW;
+        let newH = job.origH + dy0 * signH;
+        if (signW && signH) {
+          newH = newW / job.ratio;
+        }
+        if (job.kind === "sec") {
+          newW = clamp(newW, cr.width * 0.2, cr.width);
+          job.el.style.width = ((newW / cr.width) * 100) + "%";
+          job.nextW = (newW / cr.width) * 100;
+        } else if (job.kind === "banner") {
+          newH = clamp(newH, 160, 900);
+          job.el.style.minHeight = newH + "px";
+          job.nextH = newH;
+        } else {
+          newW = clamp(newW, 32, 960);
+          newH = clamp(newH, 32, 900);
+          job.el.style.width = newW + "px";
+          job.el.style.height = newH + "px";
+          job.nextW = newW;
+          job.nextH = newH;
+        }
+        return;
+      }
+      if (!canvasDrag.active) {
+        if (Math.hypot(dx0, dy0) < 8) return;
+        canvasDrag.active = true;
+        canvasDrag.moved = true;
+        snapshot();
+        state.selected = job.id;
+        state.picked = { kind: job.kind, index: job.index };
+        job.el.classList.add("sec-selected", "sec-dragging");
+        const c = $("#canvas");
+        if (c) c.classList.add("is-dragging");
+        showGuides(true);
+        try { job.el.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+      }
+      e.preventDefault();
+      const c = $("#canvas");
+      const wrap = $("#canvas-wrap");
+      if (!c || !wrap) return;
+      const cr = c.getBoundingClientRect();
+      const wr = wrap.getBoundingClientRect();
+      const snapped = snapName(job.origX + dx0, job.origW, cr);
+      const useDx = dx0 + snapped.extra;
+      const useDy = dy0;
+      job.align = snapped.align;
       job.el.style.transform = "translate(" + useDx + "px," + useDy + "px)";
       job.dy = useDy;
+      if (job.mode !== "move") return;
 
-      const others = $$("#canvas .sec").filter(s => s !== job.el);
+      const others = $$("#canvas .sec").filter(s => s !== job.secEl);
       const midY = job.origY + useDy + job.origH / 2;
       const ids = others.map(s => s.dataset.id);
       let insertAt = ids.length;
@@ -1271,12 +1509,18 @@
       }
       const page = currentPage();
       const sec = page.sections.find(s => s.id === j.id);
-      if (sec) sec.align = j.align;
-      if (Math.abs(j.dy) > 22 && j.insertIds) {
-        const map = new Map(page.sections.map(s => [s.id, s]));
-        const next = j.insertIds.slice();
-        next.splice(Math.min(j.insertAt, next.length), 0, j.id);
-        page.sections = next.map(id => map.get(id)).filter(Boolean);
+      if (j.mode === "resize" && sec) {
+        writeFrame(sec, j.kind, j.index, { w: j.nextW, h: j.nextH });
+      } else if (j.mode === "item" && sec) {
+        writeFrame(sec, j.kind, j.index, { align: j.align });
+      } else if (sec) {
+        sec.align = j.align;
+        if (Math.abs(j.dy) > 22 && j.insertIds) {
+          const map = new Map(page.sections.map(s => [s.id, s]));
+          const next = j.insertIds.slice();
+          next.splice(Math.min(j.insertAt, next.length), 0, j.id);
+          page.sections = next.map(id => map.get(id)).filter(Boolean);
+        }
       }
       persistSite();
       renderEditor();
@@ -1331,40 +1575,41 @@
         return;
       }
       if (e.target.id === "btn-new" || e.target.closest("#btn-new")) openCreate();
+      const pickBtnClick = e.target.closest(".video-replace, [data-force-pick]");
       const upCard = e.target.closest("[data-upload]");
-      if (upCard && $("#screen-editor") && $("#screen-editor").classList.contains("on") && !canvasDrag.moved && !e.target.closest(".editable")) {
+      if (pickBtnClick && upCard && $("#screen-editor") && $("#screen-editor").classList.contains("on") && !canvasDrag.moved && !e.target.closest(".editable")) {
         const parts = upCard.dataset.upload.split(":");
         startPick({ media: [parts[0], Number(parts[1])] });
         return;
       }
       const upUrl = e.target.closest("[data-upload-url]");
-      if (upUrl && !canvasDrag.moved) {
+      if (pickBtnClick && upUrl && !canvasDrag.moved) {
         startPick({ url: upUrl.dataset.uploadUrl });
         return;
       }
       const upHero = e.target.closest("[data-upload-hero]");
-      if (upHero && !canvasDrag.moved && !e.target.closest(".editable") && !e.target.closest(".copy") && !e.target.closest("[data-upload-logo]")) {
+      if (pickBtnClick && upHero && !canvasDrag.moved && !e.target.closest(".editable") && !e.target.closest(".copy") && !e.target.closest("[data-upload-logo]")) {
         startPick({ hero: upHero.dataset.uploadHero });
         return;
       }
       const upLogo = e.target.closest("[data-upload-logo]");
-      if (upLogo && !canvasDrag.moved) {
+      if (pickBtnClick && upLogo && !canvasDrag.moved) {
         startPick({ logo: upLogo.dataset.uploadLogo });
         return;
       }
       const upAbout = e.target.closest("[data-upload-about]");
-      if (upAbout && !canvasDrag.moved && !e.target.closest(".editable")) {
+      if (pickBtnClick && upAbout && !canvasDrag.moved && !e.target.closest(".editable")) {
         startPick({ about: upAbout.dataset.uploadAbout });
         return;
       }
       const upCar = e.target.closest("[data-upload-car]");
-      if (upCar && !canvasDrag.moved && !e.target.closest(".editable")) {
+      if (pickBtnClick && upCar && !canvasDrag.moved && !e.target.closest(".editable")) {
         const parts = upCar.dataset.uploadCar.split(":");
         startPick({ carousel: [parts[0], Number(parts[1])] });
         return;
       }
       const upGal = e.target.closest("[data-upload-gal]");
-      if (upGal && !canvasDrag.moved) {
+      if (pickBtnClick && upGal && !canvasDrag.moved) {
         startPick({ gallery: upGal.dataset.uploadGal });
         return;
       }
@@ -1405,6 +1650,7 @@
       if (pageBtn && state.current) {
         state.pageId = pageBtn.dataset.page;
         state.selected = null;
+        state.picked = null;
         renderEditor();
       }
       if (e.target.id === "add-page-btn" && state.current) {
@@ -1427,12 +1673,22 @@
       const sel = e.target.closest("[data-sel]");
       if (sel && state.current) {
         state.selected = sel.dataset.sel;
+        state.picked = { kind: "sec" };
         renderEditor();
       }
-      const sec = e.target.closest(".sec");
+      const sec = e.target.closest("#canvas .sec");
       if (sec && canvasDrag.moved) return;
-      if (sec && $("#screen-editor").classList.contains("on") && !e.target.closest(".editable") && !e.target.closest("button") && !e.target.closest("a") && !e.target.closest("summary")) {
+      if (sec && $("#screen-editor").classList.contains("on") && !e.target.closest(".editable") && !e.target.closest("button") && !e.target.closest("a") && !e.target.closest("summary") && !e.target.closest(".rz")) {
         state.selected = sec.dataset.id;
+        const box = e.target.closest("#canvas [data-size-kind]");
+        if (box && box.dataset.sizeKind) {
+          state.picked = {
+            kind: box.dataset.sizeKind,
+            index: box.dataset.sizeIndex != null && box.dataset.sizeIndex !== "" ? Number(box.dataset.sizeIndex) : undefined
+          };
+        } else {
+          state.picked = { kind: "sec" };
+        }
         renderEditor();
       }
       if (e.target.dataset.up || e.target.dataset.down) {
@@ -1452,7 +1708,10 @@
         snapshot();
         const id = delQuick.dataset.delSecQuick;
         currentPage().sections = currentPage().sections.filter(s => s.id !== id);
-        if (state.selected === id) state.selected = null;
+        if (state.selected === id) {
+          state.selected = null;
+          state.picked = null;
+        }
         persistSite();
         renderEditor();
         return;
@@ -1483,6 +1742,7 @@
         } else {
           currentPage().sections = arr.filter(s => s.id !== state.selected);
           state.selected = null;
+          state.picked = null;
         }
         persistSite();
         renderEditor();
@@ -1497,6 +1757,7 @@
         const neu = blankSection(addt.dataset.addType, state.current.name);
         arr.splice(at, 0, neu);
         state.selected = neu.id;
+        state.picked = { kind: "sec" };
         persistSite();
         $("#modal-sec").classList.remove("on");
         renderEditor();
@@ -1562,6 +1823,19 @@
         persistSite();
         renderEditor();
       }
+      const boxAlign = e.target.closest("[data-box-align]");
+      if (boxAlign && currentSection() && state.picked) {
+        snapshot();
+        writeFrame(currentSection(), state.picked.kind, state.picked.index, { align: boxAlign.dataset.boxAlign });
+        persistSite();
+        renderEditor();
+      }
+      if (e.target.closest("[data-frame-reset]") && currentSection() && state.picked) {
+        snapshot();
+        clearFrame(currentSection(), state.picked.kind, state.picked.index);
+        persistSite();
+        renderEditor();
+      }
       const pageAlign = e.target.closest("[data-page-align]");
       if (pageAlign && state.current) {
         snapshot();
@@ -1624,6 +1898,32 @@
           () => alert("Copie impossible — utilise Exporter.")
         );
       }
+    });
+    document.addEventListener("dblclick", (e) => {
+      if (!$("#screen-editor") || !$("#screen-editor").classList.contains("on")) return;
+      if (e.target.closest(".editable,button,a,input,textarea,.rz")) return;
+      const upCard = e.target.closest("[data-upload]");
+      if (upCard) {
+        const parts = upCard.dataset.upload.split(":");
+        startPick({ media: [parts[0], Number(parts[1])] });
+        return;
+      }
+      const upUrl = e.target.closest("[data-upload-url]");
+      if (upUrl) { startPick({ url: upUrl.dataset.uploadUrl }); return; }
+      const upHero = e.target.closest("[data-upload-hero]");
+      if (upHero) { startPick({ hero: upHero.dataset.uploadHero }); return; }
+      const upLogo = e.target.closest("[data-upload-logo]");
+      if (upLogo) { startPick({ logo: upLogo.dataset.uploadLogo }); return; }
+      const upAbout = e.target.closest("[data-upload-about]");
+      if (upAbout) { startPick({ about: upAbout.dataset.uploadAbout }); return; }
+      const upCar = e.target.closest("[data-upload-car]");
+      if (upCar) {
+        const parts = upCar.dataset.uploadCar.split(":");
+        startPick({ carousel: [parts[0], Number(parts[1])] });
+        return;
+      }
+      const upGal = e.target.closest("[data-upload-gal]");
+      if (upGal) startPick({ gallery: upGal.dataset.uploadGal });
     });
     $("#file-media")?.addEventListener("change", async (e) => {
       const file = e.target.files && e.target.files[0];
@@ -1694,7 +1994,7 @@
     });
 
     document.addEventListener("focusin", (e) => {
-      if (e.target.matches("[data-d],[data-site],[data-theme],[data-seo],.editable")) snapshot();
+      if (e.target.matches("[data-d],[data-site],[data-theme],[data-seo],[data-frame],.editable")) snapshot();
     });
 
     document.addEventListener("input", (e) => {
@@ -1735,6 +2035,18 @@
         if (!sec) return;
         if (e.target.dataset.d === "images") sec.data.images = e.target.value.split("\n").map(x => x.trim()).filter(Boolean);
         else setPath(sec.data, e.target.dataset.d, e.target.value);
+        persistSite();
+        const canvas = $("#canvas");
+        applyTheme(canvas, state.current.theme);
+        canvas.innerHTML = renderSite(state.current, { editable: true, pageId: currentPage().id });
+        hydrateMedia(canvas);
+      }
+      if (e.target.dataset.frame && currentSection()) {
+        const kind = (state.picked && state.picked.kind) || "sec";
+        const index = state.picked && state.picked.index;
+        const patch = {};
+        patch[e.target.dataset.frame] = Number(e.target.value);
+        writeFrame(currentSection(), kind, index, patch);
         persistSite();
         const canvas = $("#canvas");
         applyTheme(canvas, state.current.theme);
