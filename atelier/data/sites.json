@@ -5,7 +5,7 @@
     "name": "Pavage G.O.",
     "client": "PAVAGE G.O. 9145-7697 QUÉBEC INC.",
     "cover": "assets/asphalte.jpg",
-    "revision": 7,
+    "revision": 8,
     "updated": "2026-08-16",
     "published": false,
     "seo": {
@@ -102,7 +102,7 @@
             "data": {
               "title": "Vidéos de chantiers",
               "items": [
-                { "kicker": "À remplacer", "title": "Colle ici une vidéo de pose d'asphalte", "image": "https://images.unsplash.com/photo-1503387762-592deb58ef4e?auto=format&fit=crop&w=800&q=80", "video": "" },
+                { "kicker": "À coller", "title": "Clique ici pour choisir ta vidéo", "image": "", "video": "" },
                 { "kicker": "À remplacer", "title": "Vidéo réparation / entretien", "image": "https://images.unsplash.com/photo-1541888946425-d81bb19240f5?auto=format&fit=crop&w=800&q=80", "video": "" },
                 { "kicker": "À remplacer", "title": "Walkaround machinerie", "image": "https://images.unsplash.com/photo-1581094794329-c8112a89af12?auto=format&fit=crop&w=800&q=80", "video": "" }
               ]

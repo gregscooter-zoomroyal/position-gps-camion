@@ -2,7 +2,7 @@
   const AUTH_KEY = "atelier-auth-v1";
   const DATA_KEY = "atelier-sites-v2";
   const DATA_KEY_OLD = "atelier-sites-v1";
-  const APP_VERSION = "8";
+  const APP_VERSION = "9";
   const SHARED_KEYS = ["cursor"];
   const SERVER_LOCK = new Set(["site-pavage-go"]);
   const $ = (s, r = document) => r.querySelector(s);
@@ -17,6 +17,58 @@
     tpl: "generic"
   };
   const undoStack = [];
+  const blobUrls = new Map();
+  let uploadTarget = null;
+
+  function openMediaDb() {
+    return new Promise((resolve, reject) => {
+      const req = indexedDB.open("atelier-media-v1", 1);
+      req.onupgradeneeded = () => {
+        if (!req.result.objectStoreNames.contains("files")) req.result.createObjectStore("files");
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  }
+
+  async function mediaPut(file) {
+    const id = uid("file");
+    const buf = await file.arrayBuffer();
+    const db = await openMediaDb();
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction("files", "readwrite");
+      tx.objectStore("files").put({ type: file.type || "video/mp4", name: file.name || "", buf }, id);
+      tx.oncomplete = resolve;
+      tx.onerror = () => reject(tx.error);
+    });
+    return "idb:" + id;
+  }
+
+  async function mediaUrl(ref) {
+    const raw = String(ref || "");
+    if (!raw.startsWith("idb:")) return raw;
+    if (blobUrls.has(raw)) return blobUrls.get(raw);
+    const db = await openMediaDb();
+    const rec = await new Promise((resolve, reject) => {
+      const tx = db.transaction("files", "readonly");
+      const q = tx.objectStore("files").get(raw.slice(4));
+      q.onsuccess = () => resolve(q.result);
+      q.onerror = () => reject(q.error);
+    });
+    if (!rec) return "";
+    const url = URL.createObjectURL(new Blob([rec.buf], { type: rec.type || "video/mp4" }));
+    blobUrls.set(raw, url);
+    return url;
+  }
+
+  async function hydrateMedia(root) {
+    if (!root) return;
+    const els = [...root.querySelectorAll("[data-media-src]")];
+    for (const el of els) {
+      const src = await mediaUrl(el.dataset.mediaSrc);
+      if (src) el.src = src;
+    }
+  }
 
   function loadSites() {
     try {
@@ -144,13 +196,19 @@
     return SHARED_KEYS.includes((q.get("acces") || q.get("access") || "").toLowerCase());
   }
 
+  function isFileVideo(url) {
+    const u = String(url || "");
+    return u.startsWith("idb:") || u.startsWith("blob:") || /\.(mp4|webm|mov)($|\?)/i.test(u);
+  }
+
   function parseVideo(url) {
-    if (!url) return "";
+    if (!url) return `<div class="video-empty">Clique pour choisir une vidéo</div>`;
     const raw = String(url).trim();
     let m = raw.match(/(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([\w-]{11})/);
     if (m) return `<iframe src="https://www.youtube-nocookie.com/embed/${m[1]}" allowfullscreen allow="encrypted-media"></iframe>`;
     m = raw.match(/vimeo\.com\/(?:video\/)?(\d+)/);
     if (m) return `<iframe src="https://player.vimeo.com/video/${m[1]}" allowfullscreen></iframe>`;
+    if (raw.startsWith("idb:")) return `<video controls playsinline data-media-src="${esc(raw)}"></video>`;
     return `<video controls playsinline src="${esc(raw)}"></video>`;
   }
 
@@ -164,6 +222,7 @@
     }
     m = raw.match(/vimeo\.com\/(?:video\/)?(\d+)/);
     if (m) return `<iframe class="bg-frame" src="https://player.vimeo.com/video/${m[1]}?background=1&autoplay=1&loop=1&muted=1" allow="autoplay" title=""></iframe>`;
+    if (raw.startsWith("idb:")) return `<video class="bg-video" autoplay muted loop playsinline preload="auto" data-media-src="${esc(raw)}"></video>`;
     return `<video class="bg-video" autoplay muted loop playsinline preload="auto" src="${esc(raw)}"></video>`;
   }
 
@@ -264,15 +323,29 @@
       </div>`;
     }
     if (sec.type === "media") {
-      const cards = (d.items || []).map((it, i) => `
-        <figure class="media-card" ${it.video ? `data-open-video="${esc(it.video)}"` : ""}>
-          <img src="${esc(it.image)}" alt="">
+      const cards = (d.items || []).map((it, i) => {
+        if (editable && !it.video) {
+          return `<figure class="media-card media-drop" data-upload="${sec.id}:${i}">
+            <div class="media-drop-label">Clique pour choisir une vidéo</div>
+            <figcaption>
+              <div class="kicker">${f("items." + i + ".kicker", it.kicker)}</div>
+              <h4>${f("items." + i + ".title", it.title, "span")}</h4>
+            </figcaption>
+          </figure>`;
+        }
+        const fileVid = isFileVideo(it.video);
+        const thumb = fileVid
+          ? `<video muted playsinline preload="metadata" data-media-src="${esc(it.video)}"></video>`
+          : `<img src="${esc(it.image)}" alt="">`;
+        return `<figure class="media-card" ${it.video ? `data-open-video="${esc(it.video)}"` : ""} ${editable ? `data-upload="${sec.id}:${i}"` : ""}>
+          ${thumb}
           ${it.video ? `<span class="media-play">▶</span>` : ""}
           <figcaption>
             <div class="kicker">${f("items." + i + ".kicker", it.kicker)}</div>
             <h4>${f("items." + i + ".title", it.title, "span")}</h4>
           </figcaption>
-        </figure>`).join("");
+        </figure>`;
+      }).join("");
       return `<div class="s-media pad">${f("title", d.title, "h3")}<div class="media-grid">${cards}</div></div>`;
     }
     if (sec.type === "services") {
@@ -287,7 +360,10 @@
       </div></div>`;
     }
     if (sec.type === "video") {
-      return `<div class="s-video pad">${f("title", d.title, "h3")}<div class="video-box">${parseVideo(d.url)}</div></div>`;
+      const empty = editable && !d.url
+        ? `<div class="video-box video-drop" data-upload-url="${sec.id}"><div class="media-drop-label">Clique pour choisir une vidéo</div></div>`
+        : `<div class="video-box">${parseVideo(d.url)}</div>`;
+      return `<div class="s-video pad">${f("title", d.title, "h3")}${empty}</div>`;
     }
     if (sec.type === "gallery") {
       const imgs = (d.images || []).map(src => `<img src="${esc(src)}" alt="">`).join("");
@@ -423,6 +499,7 @@
       document.title = (site.seo && site.seo.title) || site.name;
       applyTheme(root, site.theme);
       root.innerHTML = renderSite(site, { editable: false, pageId: state.viewPageId, preview: false });
+      hydrateMedia(root);
       return;
     }
     if (parts[0] === "preview" && parts[1]) {
@@ -435,6 +512,7 @@
       state.viewPageId = parts[2] || site.pages[0].id;
       applyTheme(root, site.theme);
       root.innerHTML = renderSite(site, { editable: false, pageId: state.viewPageId, preview: true });
+      hydrateMedia(root);
       return;
     }
     if (!loggedIn()) { show("screen-gate"); renderGate(); return; }
@@ -516,6 +594,7 @@
     const canvas = $("#canvas");
     applyTheme(canvas, site.theme);
     canvas.innerHTML = renderSite(site, { editable: true, pageId: currentPage().id });
+    hydrateMedia(canvas);
     $("#canvas-wrap").classList.toggle("mobile", state.device === "mobile");
     renderInspect();
   }
@@ -611,6 +690,9 @@
             html += area
               ? `<textarea data-d="${k}.${i}.${ik}">${esc(val)}</textarea>`
               : `<input data-d="${k}.${i}.${ik}" value="${esc(val)}">`;
+            if (ik === "video" || ik === "image") {
+              html += `<button class="btn btn-ghost btn-wide" type="button" data-pick="${k}.${i}.${ik}">Choisir un fichier</button>`;
+            }
           });
         });
       } else if (k === "images") {
@@ -621,6 +703,9 @@
         html += area
           ? `<textarea data-d="${k}">${esc(d[k])}</textarea>`
           : `<input data-d="${k}" value="${esc(d[k])}">`;
+        if (k === "video" || k === "url" || k === "image" || k === "logo") {
+          html += `<button class="btn btn-ghost btn-wide" type="button" data-pick="${k}">Choisir un fichier</button>`;
+        }
       }
     });
     html += `<button class="btn btn-ghost btn-wide" type="button" id="dup-sec">Dupliquer ce bloc</button>`;
@@ -632,6 +717,42 @@
     const i = state.sites.findIndex(s => s.id === state.current.id);
     if (i >= 0) state.sites[i] = state.current;
     saveSites();
+  }
+
+  function startPick(target) {
+    uploadTarget = target;
+    const input = $("#file-media");
+    if (!input) return;
+    const image = target.path && /image|logo/.test(target.path);
+    input.accept = image ? "image/*" : "video/mp4,video/webm,video/quicktime,image/*";
+    input.value = "";
+    input.click();
+  }
+
+  async function takeFile(file) {
+    if (!file || !uploadTarget || !state.current) return;
+    if (file.size > 80 * 1024 * 1024) {
+      alert("Fichier trop lourd (max 80 Mo). Compresse la vidéo, ou mets-la sur YouTube et colle le lien.");
+      return;
+    }
+    const ref = await mediaPut(file);
+    snapshot();
+    if (uploadTarget.media) {
+      const [secId, idx] = uploadTarget.media;
+      const block = currentPage().sections.find(s => s.id === secId);
+      if (block && block.data.items && block.data.items[idx] != null) {
+        block.data.items[idx].video = ref;
+        block.data.items[idx].kicker = "Chantier";
+        block.data.items[idx].title = file.name.replace(/\.[^.]+$/, "") || "Vidéo";
+      }
+    } else if (uploadTarget.url) {
+      const block = currentPage().sections.find(s => s.id === uploadTarget.url);
+      if (block) block.data.url = ref;
+    } else if (uploadTarget.path && currentSection()) {
+      setPath(currentSection().data, uploadTarget.path, ref);
+    }
+    persistSite();
+    renderEditor();
   }
 
   function openCreate() {
@@ -712,6 +833,24 @@
         return;
       }
       if (e.target.id === "btn-new" || e.target.closest("#btn-new")) openCreate();
+      const upCard = e.target.closest("[data-upload]");
+      if (upCard && $("#screen-editor") && $("#screen-editor").classList.contains("on") && !e.target.closest("[data-open-video] .media-play")) {
+        if (!upCard.dataset.openVideo) {
+          const parts = upCard.dataset.upload.split(":");
+          startPick({ media: [parts[0], Number(parts[1])] });
+          return;
+        }
+      }
+      const upUrl = e.target.closest("[data-upload-url]");
+      if (upUrl) {
+        startPick({ url: upUrl.dataset.uploadUrl });
+        return;
+      }
+      const pick = e.target.closest("[data-pick]");
+      if (pick) {
+        startPick({ path: pick.dataset.pick });
+        return;
+      }
       if (e.target.id === "modal-new") e.target.classList.remove("on");
       const tpl = e.target.closest("[data-tpl]");
       if (tpl) {
@@ -863,6 +1002,7 @@
         const box = $("#site-lightbox");
         if (box) {
           $("#site-lightbox-stage").innerHTML = parseVideo(openV.dataset.openVideo);
+          hydrateMedia($("#site-lightbox-stage"));
           box.classList.add("on");
         }
       }
@@ -897,6 +1037,13 @@
           () => alert("Copie impossible — utilise Exporter.")
         );
       }
+    });
+    $("#file-media")?.addEventListener("change", async (e) => {
+      const file = e.target.files && e.target.files[0];
+      e.target.value = "";
+      if (!file) return;
+      try { await takeFile(file); }
+      catch { alert("Impossible d'importer ce fichier."); }
     });
     $("#btn-import")?.addEventListener("change", async (e) => {
       const file = e.target.files && e.target.files[0];
@@ -959,6 +1106,7 @@
         const canvas = $("#canvas");
         applyTheme(canvas, state.current.theme);
         canvas.innerHTML = renderSite(state.current, { editable: true, pageId: currentPage().id });
+        hydrateMedia(canvas);
       }
     });
     document.addEventListener("change", (e) => {
