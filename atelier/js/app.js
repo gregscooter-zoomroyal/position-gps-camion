@@ -2,10 +2,10 @@
   const AUTH_KEY = "atelier-auth-v1";
   const DATA_KEY = "atelier-sites-v2";
   const DATA_KEY_OLD = "atelier-sites-v1";
-  const APP_VERSION = "12";
+  const APP_VERSION = "13";
   const SHARED_KEYS = ["cursor"];
   const SERVER_LOCK = new Set(["site-pavage-go"]);
-  const PAVAGE_LOGO = "assets/logo-pavage-go.png";
+  const PAVAGE_LOGO = "assets/logo-pavage-go.png?v=13";
   const $ = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 
@@ -179,8 +179,9 @@
       (site.pages || []).forEach(p => {
         (p.sections || []).forEach(s => {
           if (!s.data) return;
-          if (s.type === "nav" && !s.data.logo) s.data.logo = PAVAGE_LOGO;
-          if (s.type === "hero" && !s.data.logo) s.data.logo = PAVAGE_LOGO;
+          if ((s.type === "nav" || s.type === "hero") && (!s.data.logo || String(s.data.logo).includes("logo-pavage-go"))) {
+            s.data.logo = PAVAGE_LOGO;
+          }
         });
       });
     }
