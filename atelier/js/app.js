@@ -2,7 +2,7 @@
   const AUTH_KEY = "atelier-auth-v1";
   const DATA_KEY = "atelier-sites-v2";
   const DATA_KEY_OLD = "atelier-sites-v1";
-  const APP_VERSION = "7";
+  const APP_VERSION = "8";
   const SHARED_KEYS = ["cursor"];
   const SERVER_LOCK = new Set(["site-pavage-go"]);
   const $ = (s, r = document) => r.querySelector(s);
@@ -358,33 +358,48 @@
     return "";
   }
 
+  function hexColor(v, fallback) {
+    let s = String(v || "").trim();
+    if (/^[0-9a-fA-F]{6}$/.test(s)) s = "#" + s;
+    if (/^#[0-9a-fA-F]{3}$/.test(s)) s = "#" + [...s.slice(1)].map(c => c + c).join("");
+    if (/^#[0-9a-fA-F]{6}$/.test(s)) return s.toLowerCase();
+    return fallback;
+  }
+
   function applyTheme(root, theme) {
+    const primary = hexColor(theme.primary, "#0f766e");
+    const accent = hexColor(theme.accent, "#e8a317");
+    const bg = hexColor(theme.bg, "#ffffff");
+    const text = hexColor(theme.text, "#111827");
     const img = theme.bgImage ? `url("${theme.bgImage}")` : "none";
-    root.style.setProperty("--site-primary", theme.primary);
-    root.style.setProperty("--site-accent", theme.accent);
-    root.style.setProperty("--site-bg-image", img);
-    root.style.color = theme.text;
-    root.style.fontFamily = theme.font + ", DM Sans, sans-serif";
-    if (theme.bgImage) {
-      root.style.background = "";
-      root.style.backgroundImage = "";
-      root.classList.add("has-asphalt");
-    } else {
-      root.style.background = theme.bg;
-      root.style.backgroundImage = "";
-      root.classList.remove("has-asphalt");
-    }
-    const wrap = root.id === "canvas" ? $("#canvas-wrap") : null;
-    if (wrap) {
-      wrap.classList.toggle("has-asphalt", !!theme.bgImage);
-      wrap.style.setProperty("--site-bg-image", img);
-    }
+    const paint = (el) => {
+      if (!el) return;
+      el.style.setProperty("--site-primary", primary);
+      el.style.setProperty("--site-accent", accent);
+      el.style.setProperty("--site-bg", bg);
+      el.style.setProperty("--site-text", text);
+      el.style.setProperty("--site-bg-image", img);
+      el.style.color = text;
+      el.style.fontFamily = (theme.font || "DM Sans") + ", DM Sans, sans-serif";
+      el.classList.toggle("has-asphalt", !!theme.bgImage);
+      if (theme.bgImage) {
+        el.style.background = "";
+        el.style.backgroundImage = "";
+      } else {
+        el.style.background = bg;
+        el.style.backgroundImage = "none";
+      }
+    };
+    paint(root);
+    if (root.id === "canvas") paint($("#canvas-wrap"));
   }
 
   function renderSite(site, { editable = false, pageId = null, preview = false } = {}) {
     const page = pageOf(site, pageId || state.pageId);
     return (page.sections || []).map(sec => {
-      const wrap = `<div class="sec ${state.selected === sec.id ? "sec-selected" : ""}" data-id="${sec.id}">${renderSection(sec, editable, site, preview)}</div>`;
+      const align = sec.align || "left";
+      const shape = sec.imageShape || "rounded";
+      const wrap = `<div class="sec align-${align} img-${shape} ${state.selected === sec.id ? "sec-selected" : ""}" data-id="${sec.id}">${renderSection(sec, editable, site, preview)}</div>`;
       return wrap;
     }).join("");
   }
@@ -512,10 +527,27 @@
     cur[parts[parts.length - 1]] = value;
   }
 
+  function colorRow(key, label, value, fallback) {
+    const hex = hexColor(value, fallback);
+    return `<label>${label}</label>
+      <div class="color-row">
+        <input data-theme="${key}" type="color" value="${hex}">
+        <input data-theme="${key}" class="hex-in" value="${hex}" maxlength="7" spellcheck="false">
+      </div>`;
+  }
+
+  function chipRow(label, attr, current, options) {
+    return `<label>${label}</label>
+      <div class="chip-row">${options.map(([val, name]) =>
+        `<button type="button" class="chip ${current === val ? "on" : ""}" ${attr}="${val}">${name}</button>`
+      ).join("")}</div>`;
+  }
+
   function renderInspect() {
     const box = $("#inspect-body");
     const site = state.current;
     const sec = currentSection();
+    const t = site.theme || {};
     let html = `
       <h4>Site</h4>
       <label>Nom du site</label><input data-site="name" value="${esc(site.name)}">
@@ -524,16 +556,27 @@
       <label>Description SEO</label><textarea data-seo="description">${esc((site.seo && site.seo.description) || "")}</textarea>
       <label>Police</label>
       <select data-theme="font">${(typeof SITE_FONTS !== "undefined" ? SITE_FONTS : ["DM Sans"]).map(f =>
-        `<option${(site.theme.font || "DM Sans") === f ? " selected" : ""}>${f}</option>`).join("")}</select>
-      <label>Couleur principale</label><input data-theme="primary" type="color" value="${site.theme.primary}">
-      <label>Couleur d'accent</label><input data-theme="accent" type="color" value="${site.theme.accent}">
-      <label>Couleur de fond</label><input data-theme="bg" type="color" value="${site.theme.bg || "#ffffff"}">
+        `<option${(t.font || "DM Sans") === f ? " selected" : ""}>${f}</option>`).join("")}</select>
+      ${colorRow("primary", "Couleur principale", t.primary, "#0f766e")}
+      ${colorRow("accent", "Couleur d'accent (boutons)", t.accent, "#e8a317")}
+      ${colorRow("bg", "Couleur de fond", t.bg, "#737375")}
+      ${colorRow("text", "Couleur du texte", t.text, "#111827")}
+      <label class="check-lab"><input id="theme-texture" type="checkbox" ${t.bgImage ? "checked" : ""}> Toile asphalte derrière</label>
+      ${chipRow("Aligner toute la page", "data-page-align", "", [
+        ["left", "Gauche"], ["center", "Centre"], ["right", "Droite"]
+      ])}
     `;
     if (!sec) {
       box.innerHTML = html + `<p style="color:var(--muted);font-size:13px;margin-top:16px">Clique un bloc sur la page pour le modifier.</p>`;
       return;
     }
     html += `<h4>Bloc</h4>`;
+    html += chipRow("Alignement", "data-align", sec.align || "left", [
+      ["left", "Gauche"], ["center", "Centre"], ["right", "Droite"]
+    ]);
+    html += chipRow("Forme des images", "data-shape", sec.imageShape || "rounded", [
+      ["original", "Original"], ["rounded", "Arrondi"], ["circle", "Cercle"], ["square", "Carré"]
+    ]);
     const d = sec.data;
     const labels = {
       video: "URL vidéo de fond (YouTube, Vimeo ou MP4)",
@@ -786,6 +829,27 @@
       }
       if (e.target.id === "btn-desktop") { state.device = "desktop"; renderEditor(); }
       if (e.target.id === "btn-mobile") { state.device = "mobile"; renderEditor(); }
+      const alignBtn = e.target.closest("[data-align]");
+      if (alignBtn && currentSection()) {
+        snapshot();
+        currentSection().align = alignBtn.dataset.align;
+        persistSite();
+        renderEditor();
+      }
+      const pageAlign = e.target.closest("[data-page-align]");
+      if (pageAlign && state.current) {
+        snapshot();
+        currentPage().sections.forEach(s => { s.align = pageAlign.dataset.pageAlign; });
+        persistSite();
+        renderEditor();
+      }
+      const shapeBtn = e.target.closest("[data-shape]");
+      if (shapeBtn && currentSection()) {
+        snapshot();
+        currentSection().imageShape = shapeBtn.dataset.shape;
+        persistSite();
+        renderEditor();
+      }
       if (e.target.id === "btn-undo") undoLast();
       if (e.target.id === "btn-preview" && state.current) {
         location.hash = "#/preview/" + state.current.id + "/" + currentPage().id;
@@ -866,7 +930,23 @@
         persistSite();
       }
       if (e.target.dataset.theme) {
-        state.current.theme[e.target.dataset.theme] = e.target.value;
+        const key = e.target.dataset.theme;
+        let val = e.target.value;
+        if (key === "font") {
+          state.current.theme.font = val;
+        } else {
+          if (val && val[0] !== "#") val = "#" + val;
+          if (e.target.type !== "color" && val.length < 7) {
+            state.current.theme[key] = val;
+            persistSite();
+            return;
+          }
+          const hex = hexColor(val, hexColor(state.current.theme[key], "#888888"));
+          state.current.theme[key] = hex;
+          $$("[data-theme=\"" + key + "\"]").forEach(el => {
+            if (el !== e.target) el.value = hex;
+          });
+        }
         persistSite();
         applyTheme($("#canvas"), state.current.theme);
       }
@@ -882,8 +962,28 @@
       }
     });
     document.addEventListener("change", (e) => {
-      if (!state.current || !e.target.dataset.theme) return;
-      state.current.theme[e.target.dataset.theme] = e.target.value;
+      if (!state.current) return;
+      if (e.target.id === "theme-texture") {
+        snapshot();
+        if (e.target.checked) {
+          state.current.theme.bgImage = state.current.theme.texture || "assets/asphalte.jpg";
+        } else {
+          if (state.current.theme.bgImage) state.current.theme.texture = state.current.theme.bgImage;
+          state.current.theme.bgImage = "";
+        }
+        persistSite();
+        applyTheme($("#canvas"), state.current.theme);
+        return;
+      }
+      if (!e.target.dataset.theme) return;
+      const key = e.target.dataset.theme;
+      if (key === "font") {
+        state.current.theme.font = e.target.value;
+      } else {
+        const hex = hexColor(e.target.value, hexColor(state.current.theme[key], "#888888"));
+        state.current.theme[key] = hex;
+        $$("[data-theme=\"" + key + "\"]").forEach(el => { el.value = hex; });
+      }
       persistSite();
       applyTheme($("#canvas"), state.current.theme);
     });
