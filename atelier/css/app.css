@@ -241,16 +241,16 @@ input, textarea, select {
 .canvas-wrap.mobile { max-width: 390px; }
 .canvas { min-height: 100%; }
 
-/* Toile d'asphalte noire granuleuse */
+/* Bande d'asphalte pleine largeur (une pièce, comme pavagego.com) */
 .workspace.has-asphalt,
 .canvas-wrap.has-asphalt,
 .canvas.has-asphalt,
 .pub.has-asphalt {
-  background-color: #111111 !important;
-  background-image: url("../assets/asphalte-bande.jpg") !important;
-  background-repeat: repeat !important;
-  background-size: 420px 420px !important;
-  background-position: 0 0 !important;
+  background-color: #37362f !important;
+  background-image: url("../assets/asphalte-bande.jpg?v=24") !important;
+  background-repeat: repeat-y !important;
+  background-size: 100% auto !important;
+  background-position: center top !important;
   background-blend-mode: normal !important;
 }
 .canvas.has-asphalt,

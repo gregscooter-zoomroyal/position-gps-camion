@@ -2,11 +2,11 @@
   const AUTH_KEY = "atelier-auth-v1";
   const DATA_KEY = "atelier-sites-v2";
   const DATA_KEY_OLD = "atelier-sites-v1";
-  const APP_VERSION = "23";
+  const APP_VERSION = "24";
   const SHARED_KEYS = ["cursor"];
   const SERVER_LOCK = new Set(["site-pavage-go"]);
   const PAVAGE_LOGO = "";
-  const PAVAGE_ASPHALT = "assets/asphalte-bande.jpg?v=23";
+  const PAVAGE_ASPHALT = "assets/asphalte-bande.jpg?v=24";
   const DOCK_TYPES = new Set(["text", "logo", "services", "about", "contact", "carousel", "media", "video", "gallery", "faq", "quotes", "hours", "form", "map", "logos"]);
   const $ = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -644,11 +644,11 @@
         const url = 'url("' + PAVAGE_ASPHALT + '")';
         el.style.color = "#f3f3f1";
         el.style.removeProperty("background");
-        el.style.setProperty("background-color", "#111111", "important");
+        el.style.setProperty("background-color", "#37362f", "important");
         el.style.setProperty("background-image", url, "important");
-        el.style.setProperty("background-repeat", "repeat", "important");
-        el.style.setProperty("background-size", "420px 420px", "important");
-        el.style.setProperty("background-position", "0 0", "important");
+        el.style.setProperty("background-repeat", "repeat-y", "important");
+        el.style.setProperty("background-size", "100% auto", "important");
+        el.style.setProperty("background-position", "center top", "important");
       } else {
         el.style.color = text;
         el.style.background = bg;
