@@ -2,11 +2,12 @@
   const AUTH_KEY = "atelier-auth-v1";
   const DATA_KEY = "atelier-sites-v2";
   const DATA_KEY_OLD = "atelier-sites-v1";
-  const APP_VERSION = "19";
+  const APP_VERSION = "20";
   const SHARED_KEYS = ["cursor"];
   const SERVER_LOCK = new Set(["site-pavage-go"]);
-  const PAVAGE_LOGO = "assets/logo-pavage-go.png?v=19";
-  const PAVAGE_ASPHALT = "assets/asphalte-bande.jpg?v=19";
+  const PAVAGE_LOGO = "assets/logo-pavage-go.png?v=20";
+  const PAVAGE_ASPHALT = "assets/asphalte-bande.jpg?v=20";
+  const DOCK_TYPES = new Set(["services", "about", "contact", "carousel", "media", "video", "gallery", "faq", "quotes", "hours", "form", "map", "logos"]);
   const $ = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 
@@ -589,7 +590,8 @@
     return (page.sections || []).map(sec => {
       const align = sec.align || "left";
       const shape = sec.imageShape || "rounded";
-      const wrap = `<div class="sec align-${align} img-${shape} ${state.selected === sec.id ? "sec-selected" : ""}" data-id="${sec.id}">${renderSection(sec, editable, site, preview)}</div>`;
+      const dock = DOCK_TYPES.has(sec.type) ? " dockable" : "";
+      const wrap = `<div class="sec align-${align} img-${shape}${dock} ${state.selected === sec.id ? "sec-selected" : ""}" data-id="${sec.id}" data-type="${esc(sec.type)}">${renderSection(sec, editable, site, preview)}</div>`;
       return wrap;
     }).join("");
   }
@@ -707,6 +709,7 @@
     }).join("");
     const canvas = $("#canvas");
     applyTheme(canvas, site.theme);
+    canvas.classList.add("editing");
     canvas.innerHTML = renderSite(site, { editable: true, pageId: currentPage().id });
     hydrateMedia(canvas);
     $("#canvas-wrap").classList.toggle("mobile", state.device === "mobile");
@@ -767,6 +770,7 @@
     html += chipRow("Alignement", "data-align", sec.align || "left", [
       ["left", "Gauche"], ["center", "Centre"], ["right", "Droite"]
     ]);
+    html += `<p style="color:var(--muted);font-size:12px;margin:0 0 12px">Glisse le rectangle sur la page. Les lignes roses indiquent Gauche, Centre, Droite.</p>`;
     html += chipRow("Forme des images", "data-shape", sec.imageShape || "rounded", [
       ["original", "Original"], ["rounded", "Arrondi"], ["circle", "Cercle"], ["square", "Carré"]
     ]);
@@ -916,6 +920,163 @@
     location.hash = "#/edit/" + site.id;
   }
 
+  const canvasDrag = { active: false, moved: false };
+
+  function bindCanvasDrag() {
+    const SNAP = 14;
+    let job = null;
+
+    const showGuides = (on) => {
+      const g = $("#align-guides");
+      if (g) g.classList.toggle("on", !!on);
+    };
+    const setGuide = (name, on) => {
+      const el = $("#guide-" + name);
+      if (el) el.classList.toggle("on", !!on);
+    };
+    const hideDrop = () => {
+      const d = $("#drop-line");
+      if (d) d.classList.remove("on");
+    };
+
+    document.addEventListener("pointerdown", (e) => {
+      if (e.button !== 0) return;
+      if (!$("#screen-editor") || !$("#screen-editor").classList.contains("on")) return;
+      if (e.target.closest("a,button,input,textarea,select,summary,.editable,[contenteditable],[data-upload],[data-upload-url],video,iframe,.car-btn,.car-track")) return;
+      const sec = e.target.closest("#canvas .sec");
+      if (!sec || !sec.dataset.id) return;
+      const r = sec.getBoundingClientRect();
+      job = {
+        id: sec.dataset.id,
+        el: sec,
+        startX: e.clientX,
+        startY: e.clientY,
+        origX: r.left,
+        origY: r.top,
+        origW: r.width,
+        origH: r.height,
+        align: (sec.className.match(/align-(left|center|right)/) || [,"left"])[1],
+        insertAt: null,
+        insertIds: null,
+        dy: 0
+      };
+      canvasDrag.moved = false;
+      canvasDrag.active = false;
+    });
+
+    document.addEventListener("pointermove", (e) => {
+      if (!job) return;
+      const dx0 = e.clientX - job.startX;
+      const dy0 = e.clientY - job.startY;
+      if (!canvasDrag.active) {
+        if (Math.hypot(dx0, dy0) < 8) return;
+        canvasDrag.active = true;
+        canvasDrag.moved = true;
+        snapshot();
+        state.selected = job.id;
+        job.el.classList.add("sec-selected", "sec-dragging");
+        const c = $("#canvas");
+        if (c) c.classList.add("is-dragging");
+        showGuides(true);
+        try { job.el.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+      }
+      e.preventDefault();
+      const c = $("#canvas");
+      const wrap = $("#canvas-wrap");
+      if (!c || !wrap) return;
+      const cr = c.getBoundingClientRect();
+      const wr = wrap.getBoundingClientRect();
+      let useDx = dx0;
+      let useDy = dy0;
+      const left = job.origX + useDx;
+      const w = job.origW;
+      const cx = left + w / 2;
+      const right = left + w;
+      const targets = [
+        { name: "left", x: cr.left, edge: "left" },
+        { name: "center", x: cr.left + cr.width / 2, edge: "center" },
+        { name: "right", x: cr.right, edge: "right" }
+      ];
+      ["left", "center", "right"].forEach(n => setGuide(n, false));
+      let best = null;
+      let bestDist = SNAP + 1;
+      for (const t of targets) {
+        const val = t.edge === "left" ? left : t.edge === "right" ? right : cx;
+        const dist = Math.abs(val - t.x);
+        if (dist < bestDist) {
+          bestDist = dist;
+          best = t;
+        }
+      }
+      if (best && bestDist <= SNAP) {
+        const val = best.edge === "left" ? left : best.edge === "right" ? right : cx;
+        useDx += (best.x - val);
+        job.align = best.name;
+        setGuide(best.name, true);
+      } else {
+        const rel = (cx - cr.left) / Math.max(cr.width, 1);
+        job.align = rel < 0.38 ? "left" : rel > 0.62 ? "right" : "center";
+        setGuide(job.align, true);
+      }
+      job.el.style.transform = "translate(" + useDx + "px," + useDy + "px)";
+      job.dy = useDy;
+
+      const others = $$("#canvas .sec").filter(s => s !== job.el);
+      const midY = job.origY + useDy + job.origH / 2;
+      const ids = others.map(s => s.dataset.id);
+      let insertAt = ids.length;
+      let lineY = others.length ? (others[others.length - 1].getBoundingClientRect().bottom - wr.top) : 8;
+      for (let i = 0; i < others.length; i++) {
+        const or = others[i].getBoundingClientRect();
+        if (midY < or.top + or.height / 2) {
+          insertAt = i;
+          lineY = or.top - wr.top;
+          break;
+        }
+      }
+      job.insertIds = ids;
+      job.insertAt = insertAt;
+      const dl = $("#drop-line");
+      if (dl) {
+        dl.style.top = Math.max(0, lineY) + "px";
+        dl.classList.add("on");
+      }
+    }, { passive: false });
+
+    const endDrag = () => {
+      if (!job) return;
+      const j = job;
+      job = null;
+      showGuides(false);
+      ["left", "center", "right"].forEach(n => setGuide(n, false));
+      hideDrop();
+      const c = $("#canvas");
+      if (c) c.classList.remove("is-dragging");
+      j.el.classList.remove("sec-dragging");
+      j.el.style.transform = "";
+      if (!canvasDrag.active) return;
+      canvasDrag.active = false;
+      if (!state.current) {
+        canvasDrag.moved = false;
+        return;
+      }
+      const page = currentPage();
+      const sec = page.sections.find(s => s.id === j.id);
+      if (sec) sec.align = j.align;
+      if (Math.abs(j.dy) > 22 && j.insertIds) {
+        const map = new Map(page.sections.map(s => [s.id, s]));
+        const next = j.insertIds.slice();
+        next.splice(Math.min(j.insertAt, next.length), 0, j.id);
+        page.sections = next.map(id => map.get(id)).filter(Boolean);
+      }
+      persistSite();
+      renderEditor();
+      setTimeout(() => { canvasDrag.moved = false; }, 0);
+    };
+    document.addEventListener("pointerup", endDrag);
+    document.addEventListener("pointercancel", endDrag);
+  }
+
   function bind() {
     $("#gate-form").addEventListener("submit", async (e) => {
       e.preventDefault();
@@ -1034,6 +1195,7 @@
         renderEditor();
       }
       const sec = e.target.closest(".sec");
+      if (sec && canvasDrag.moved) return;
       if (sec && $("#screen-editor").classList.contains("on") && !e.target.closest(".editable") && !e.target.closest("button") && !e.target.closest("a") && !e.target.closest("summary")) {
         state.selected = sec.dataset.id;
         renderEditor();
@@ -1328,6 +1490,7 @@
         if (v.paused) armVideo(v);
       });
     }, 800);
+    bindCanvasDrag();
   }
 
   const groups = [];

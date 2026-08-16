@@ -229,6 +229,7 @@ input, textarea, select {
   padding: 28px 18px 60px;
 }
 .canvas-wrap {
+  position: relative;
   background: #fff;
   color: #111;
   box-shadow: 0 18px 50px rgba(0,0,0,.18);
@@ -610,6 +611,77 @@ video::-webkit-media-controls-overlay-play-button {
 
 .sec-selected { outline: 2px solid var(--teal); outline-offset: -2px; }
 .editable[contenteditable="true"] { outline: 1px dashed rgba(20,184,166,.5); cursor: text; }
+
+#canvas.editing .sec { cursor: grab; touch-action: none; }
+#canvas.editing .sec.sec-dragging {
+  cursor: grabbing;
+  z-index: 6;
+  position: relative;
+  box-shadow: 0 16px 40px rgba(0,0,0,.35);
+  opacity: .96;
+}
+#canvas.is-dragging .sec { pointer-events: none; }
+#canvas.is-dragging .sec.sec-dragging { pointer-events: auto; }
+
+.canvas .sec.dockable,
+.pub .sec.dockable {
+  width: 90%;
+  box-sizing: border-box;
+}
+.canvas .sec.dockable.align-left,
+.pub .sec.dockable.align-left { margin-left: 0; margin-right: auto; }
+.canvas .sec.dockable.align-center,
+.pub .sec.dockable.align-center { margin-left: auto; margin-right: auto; }
+.canvas .sec.dockable.align-right,
+.pub .sec.dockable.align-right { margin-left: auto; margin-right: 0; }
+
+.align-guides {
+  position: absolute;
+  inset: 0;
+  z-index: 25;
+  pointer-events: none;
+  display: none;
+}
+.align-guides.on { display: block; }
+.guide {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  border-left: 2px solid #ff3fac;
+  opacity: 0;
+}
+.guide.on { opacity: 1; }
+.guide-left, #guide-left { left: 0; }
+.guide-center, #guide-center { left: 50%; }
+.guide-right, #guide-right { left: 100%; }
+.guide span {
+  position: absolute;
+  top: 10px;
+  left: 8px;
+  background: #ff3fac;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+#guide-center span { left: 0; transform: translateX(-50%); }
+#guide-right span { left: auto; right: 8px; }
+.drop-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: #ff3fac;
+  z-index: 26;
+  pointer-events: none;
+  display: none;
+}
+.drop-line.on { display: block; }
 
 .color-row { display: flex; gap: 8px; align-items: center; }
 .color-row input[type="color"] { width: 48px; height: 36px; padding: 0; border: 0; background: none; }
