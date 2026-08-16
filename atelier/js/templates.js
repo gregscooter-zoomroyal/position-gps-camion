@@ -368,26 +368,34 @@ const TEMPLATES = [
 ];
 
 const SECTION_CATALOG = [
-  { type: "nav", label: "Barre de navigation" },
-  { type: "hero", label: "Bannière (photo ou vidéo de fond)" },
-  { type: "video-bg", label: "Emplacement vidéo + texte par-dessus" },
-  { type: "stats", label: "Chiffres / confiance" },
-  { type: "carousel", label: "Carrousel (réalisations)" },
-  { type: "services", label: "Services" },
-  { type: "about", label: "À propos" },
-  { type: "media", label: "Médias / vidéos (lecture)" },
-  { type: "video", label: "Vidéo encadrée" },
-  { type: "gallery", label: "Galerie photos" },
-  { type: "cta", label: "Bandeau d'action" },
-  { type: "contact", label: "Contact" },
-  { type: "footer", label: "Pied de page" }
+  { type: "nav", label: "Barre de navigation", group: "En-tête" },
+  { type: "hero", label: "Bannière (photo ou vidéo de fond)", group: "En-tête" },
+  { type: "video-bg", label: "Emplacement vidéo + texte par-dessus", group: "En-tête" },
+  { type: "services", label: "Services", group: "Contenu" },
+  { type: "about", label: "À propos", group: "Contenu" },
+  { type: "gallery", label: "Galerie photos", group: "Contenu" },
+  { type: "carousel", label: "Carrousel (réalisations)", group: "Contenu" },
+  { type: "media", label: "Médias / vidéos (lecture)", group: "Contenu" },
+  { type: "video", label: "Vidéo encadrée", group: "Contenu" },
+  { type: "stats", label: "Chiffres / confiance", group: "Confiance" },
+  { type: "quotes", label: "Témoignages", group: "Confiance" },
+  { type: "faq", label: "Questions fréquentes", group: "Confiance" },
+  { type: "logos", label: "Logos / partenaires", group: "Confiance" },
+  { type: "hours", label: "Heures d'ouverture", group: "Contact" },
+  { type: "form", label: "Formulaire de contact", group: "Contact" },
+  { type: "map", label: "Carte Google", group: "Contact" },
+  { type: "cta", label: "Bandeau d'action", group: "Contact" },
+  { type: "contact", label: "Coordonnées", group: "Contact" },
+  { type: "footer", label: "Pied de page", group: "Contact" }
 ];
+
+const SITE_FONTS = ["DM Sans", "Inter", "Barlow", "Playfair Display", "Cormorant Garamond"];
 
 function blankSection(type, brand) {
   const map = {
-    nav: { brand: brand || "Marque", links: "Accueil,Services,Contact" },
-    hero: { kicker: "Accroche", title: "Titre principal", subtitle: "Une phrase claire sur l'offre.", cta: "Appel à l'action", image: "https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=1600&q=80", video: "" },
-    "video-bg": { kicker: "Vidéo", title: "Titre sur la vidéo", subtitle: "Le texte reste lisible, la vidéo joue derrière.", cta: "En savoir plus", video: "https://videos.pexels.com/video-files/3571264/3571264-hd_1920_1080_30fps.mp4" },
+    nav: { brand: brand || "Marque", links: "Accueil,Services,Contact", logo: "" },
+    hero: { kicker: "Accroche", title: "Titre principal", subtitle: "Une phrase claire sur l'offre.", cta: "Appel à l'action", href: "", image: "https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=1600&q=80", video: "" },
+    "video-bg": { kicker: "Vidéo", title: "Titre sur la vidéo", subtitle: "Le texte reste lisible, la vidéo joue derrière.", cta: "En savoir plus", href: "", video: "https://videos.pexels.com/video-files/3571264/3571264-hd_1920_1080_30fps.mp4" },
     stats: { items: [{ value: "1993", label: "Depuis" }, { value: "100%", label: "Sur place" }, { value: "RBQ", label: "Licence" }] },
     carousel: { title: "En vedette", cards: [
       { kicker: "Projet", title: "Titre 1", text: "Courte description.", image: "https://images.unsplash.com/photo-1504307651254-35680f356dfd?auto=format&fit=crop&w=800&q=70" },
@@ -401,7 +409,26 @@ function blankSection(type, brand) {
     about: { title: "À propos", text: "Présentez l'entreprise.", image: "https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&w=1200&q=80" },
     video: { title: "Vidéo", url: "https://www.youtube.com/watch?v=zyYgDtY2AMY" },
     gallery: { title: "Galerie", images: ["https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=800&q=70", "https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&w=800&q=70", "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=800&q=70"] },
-    cta: { title: "Prêt à commencer ?", button: "Nous écrire" },
+    quotes: { title: "Ce qu'on dit de nous", items: [
+      { text: "Travail propre, délais respectés.", name: "Client" },
+      { text: "Devis clair, équipe à l'écoute.", name: "Cliente" }
+    ] },
+    faq: { title: "Questions fréquentes", items: [
+      { q: "Est-ce que l'estimation est gratuite ?", a: "Oui. On se déplace pour voir le chantier." },
+      { q: "Quelle est la zone desservie ?", a: "Indiquez les villes ici." }
+    ] },
+    logos: { title: "Partenaires", items: [
+      { label: "APCHQ", image: "" },
+      { label: "RBQ", image: "" }
+    ] },
+    hours: { title: "Heures", items: [
+      { day: "Lundi – Vendredi", time: "8 h – 18 h" },
+      { day: "Samedi", time: "Sur rendez-vous" },
+      { day: "Dimanche", time: "Fermé" }
+    ] },
+    form: { title: "Écrivez-nous", button: "Envoyer", mailto: "" },
+    map: { title: "Nous trouver", query: "83 route 139, Roxton Pond, Québec" },
+    cta: { title: "Prêt à commencer ?", button: "Nous écrire", href: "" },
     contact: { title: "Contact", address: "Adresse", phone: "Téléphone", email: "courriel@exemple.com" },
     footer: { brand: brand || "Marque", note: "Tous droits réservés." }
   };
