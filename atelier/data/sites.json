@@ -5,9 +5,13 @@
     "name": "Pavage G.O.",
     "client": "PAVAGE G.O. 9145-7697 QUÉBEC INC.",
     "cover": "assets/asphalte.jpg",
-    "revision": 5,
-    "updated": "2026-08-15",
+    "revision": 6,
+    "updated": "2026-08-16",
     "published": false,
+    "seo": {
+      "title": "Pavage G.O. · Asphalte Granby et Roxton Pond",
+      "description": "Pose, réparation et entretien d'asphalte. Estimation gratuite. 450 378-2117."
+    },
     "theme": {
       "primary": "#0b0c0e",
       "accent": "#e8a317",
@@ -38,6 +42,7 @@
               "title": "L'asphalte, bien fait.",
               "subtitle": "Pose, réparation et entretien d'entrées et de stationnements. Une visite sur place, un devis clair, un chantier propre.",
               "cta": "Estimation gratuite · 450 378-2117",
+              "href": "tel:4503782117",
               "image": "",
               "video": ""
             }
@@ -104,11 +109,53 @@
             }
           },
           {
+            "id": "sec-hours",
+            "type": "hours",
+            "data": {
+              "title": "Bureau",
+              "items": [
+                { "day": "Lundi – Vendredi", "time": "8 h – 18 h" },
+                { "day": "Samedi", "time": "Sur rendez-vous" },
+                { "day": "Dimanche", "time": "Fermé" }
+              ]
+            }
+          },
+          {
+            "id": "sec-faq",
+            "type": "faq",
+            "data": {
+              "title": "Questions fréquentes",
+              "items": [
+                { "q": "L'estimation est-elle gratuite ?", "a": "Oui. Une visite à domicile est obligatoire : chaque entrée a ses particularités." },
+                { "q": "Quelle est la zone desservie ?", "a": "Granby, Roxton Pond, Bromont, Waterloo, Shefford, Cowansville, Haute-Yamaska et Estrie." },
+                { "q": "Êtes-vous licenciés ?", "a": "Oui. Licence RBQ 8315-8170-41. Membre APCHQ." }
+              ]
+            }
+          },
+          {
+            "id": "sec-form",
+            "type": "form",
+            "data": {
+              "title": "Demander une estimation",
+              "button": "Envoyer la demande",
+              "mailto": ""
+            }
+          },
+          {
+            "id": "sec-map",
+            "type": "map",
+            "data": {
+              "title": "Nous trouver",
+              "query": "83 route 139, Roxton Pond, Québec J0E 1Z0"
+            }
+          },
+          {
             "id": "sec-cta",
             "type": "cta",
             "data": {
               "title": "Estimation gratuite — on se déplace",
-              "button": "Appeler le 450 378-2117"
+              "button": "Appeler le 450 378-2117",
+              "href": "tel:4503782117"
             }
           },
           {

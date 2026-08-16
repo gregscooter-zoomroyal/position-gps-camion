@@ -109,8 +109,13 @@ input, textarea, select {
   padding: 2px 8px;
   letter-spacing: 0;
 }
-.top-actions { display: flex; gap: 8px; align-items: center; }
+.top-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .site-name { font-size: 13px; color: var(--muted); }
+.save-pill {
+  font-size: 11px;
+  color: #7dd3c7;
+  padding: 4px 8px;
+}
 
 /* dash */
 .dash { padding: 28px; overflow: auto; flex: 1; background: #0c0f13; }
@@ -156,7 +161,7 @@ input, textarea, select {
 .card-body { padding: 14px; }
 .card-body h3 { margin: 0 0 4px; font-size: 16px; }
 .card-body p { margin: 0; color: var(--muted); font-size: 13px; }
-.card-actions { display: flex; gap: 8px; padding: 0 14px 14px; }
+.card-actions { display: flex; gap: 8px; padding: 0 14px 14px; flex-wrap: wrap; }
 .new-card {
   border: 1px dashed var(--line);
   background: transparent;
@@ -198,6 +203,25 @@ input, textarea, select {
 }
 .sec-item.on, .sec-item:hover { background: #1e2630; }
 .sec-item button { background: none; border: 0; color: var(--muted); padding: 2px 4px; }
+.page-item {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 8px;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #c5ced8;
+  width: 100%;
+  background: none;
+  border: 0;
+  text-align: left;
+}
+.page-item.on, .page-item:hover { background: #1e2630; color: #fff; }
+.sec-group {
+  font-size: 11px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 14px 0 4px;
+}
 .workspace {
   background: var(--workspace);
   overflow: auto;
@@ -288,14 +312,19 @@ input, textarea, select {
 }
 
 /* published site canvas (also editor) */
-.s-nav, .s-hero, .s-services, .s-about, .s-video, .s-gallery, .s-cta, .s-contact, .s-footer, .s-carousel, .s-media, .s-stats, .s-video-bg {
+.s-nav, .s-hero, .s-services, .s-about, .s-video, .s-gallery, .s-cta, .s-contact, .s-footer, .s-carousel, .s-media, .s-stats, .s-video-bg, .s-faq, .s-quotes, .s-hours, .s-form, .s-map, .s-logos {
   position: relative;
 }
 .s-nav {
   display: flex; justify-content: space-between; align-items: center;
   padding: 16px 28px;
   font-weight: 700;
+  gap: 16px;
 }
+.s-nav .brand-wrap { display: flex; align-items: center; gap: 10px; }
+.s-nav .brand-wrap img { height: 32px; width: auto; }
+.s-nav .links a { text-decoration: none; opacity: .85; }
+.s-nav .links a:hover { opacity: 1; }
 .s-nav .links { display: flex; gap: 16px; font-weight: 500; font-size: 14px; opacity: .75; }
 .s-hero {
   min-height: 480px;
@@ -399,6 +428,46 @@ input, textarea, select {
 .lb.on { display: grid; }
 .lb-stage { width: min(960px, 100%); aspect-ratio: 16/9; background: #000; }
 .lb-stage iframe, .lb-stage video { width: 100%; height: 100%; border: 0; }
+
+.s-faq .faq-item, .s-quotes .quote, .s-hours .hour-row {
+  border-bottom: 1px solid rgba(0,0,0,.08);
+  padding: 12px 0;
+}
+.s-faq summary { cursor: pointer; font-weight: 700; }
+.s-faq p { margin: 8px 0 0; }
+.s-quotes .quote p { font-size: 18px; margin: 0 0 8px; }
+.s-quotes .quote span { font-size: 13px; opacity: .7; }
+.s-hours .hour-row { display: flex; justify-content: space-between; gap: 16px; }
+.s-form form { display: grid; gap: 10px; max-width: 480px; }
+.s-form input, .s-form textarea {
+  background: #fff;
+  color: #111;
+  border: 1px solid #d1d5db;
+}
+.s-map iframe { width: 100%; height: 280px; border: 0; border-radius: 12px; }
+.s-logos .logo-row { display: flex; flex-wrap: wrap; gap: 18px; align-items: center; }
+.s-logos .logo-pill {
+  padding: 10px 16px;
+  border: 1px solid #e5e7eb;
+  background: rgba(255,255,255,.9);
+  color: #111;
+  font-weight: 700;
+}
+.canvas.has-asphalt .s-faq,
+.canvas.has-asphalt .s-quotes,
+.canvas.has-asphalt .s-hours,
+.canvas.has-asphalt .s-form,
+.canvas.has-asphalt .s-map,
+.canvas.has-asphalt .s-logos,
+.pub.has-asphalt .s-faq,
+.pub.has-asphalt .s-quotes,
+.pub.has-asphalt .s-hours,
+.pub.has-asphalt .s-form,
+.pub.has-asphalt .s-map,
+.pub.has-asphalt .s-logos {
+  background: transparent;
+  color: #f3f3f1;
+}
 
 .sec-selected { outline: 2px solid var(--teal); outline-offset: -2px; }
 .editable[contenteditable="true"] { outline: 1px dashed rgba(20,184,166,.5); cursor: text; }
