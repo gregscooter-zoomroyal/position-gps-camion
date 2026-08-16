@@ -240,15 +240,15 @@ input, textarea, select {
 .canvas-wrap.mobile { max-width: 390px; }
 .canvas { min-height: 100%; }
 
-/* Toile d'asphalte grisâtre derrière la page (pas une photo plein écran) */
+/* Bande d'asphalte Pavage GO (pavagego.com) — toute la longueur, à la place du blanc */
 .canvas-wrap.has-asphalt,
 .canvas.has-asphalt,
 .pub.has-asphalt {
-  background-color: var(--site-bg, #8b8b8e) !important;
-  background-image: var(--site-bg-image);
-  background-size: 320px 320px;
+  background-color: #121212 !important;
+  background-image: url("../assets/bande-asphalte.png") !important;
+  background-size: 124px 480px;
   background-repeat: repeat;
-  background-blend-mode: soft-light;
+  background-blend-mode: normal;
 }
 .canvas.has-asphalt,
 .pub.has-asphalt {
@@ -302,24 +302,41 @@ input, textarea, select {
   color: #f3f3f1;
 }
 .canvas.has-asphalt .svc,
-.pub.has-asphalt .svc {
-  background: rgba(248, 248, 246, .92);
-  color: #111;
-}
+.pub.has-asphalt .svc,
 .canvas.has-asphalt .car-card,
-.pub.has-asphalt .car-card {
-  background: rgba(248, 248, 246, .94);
-  color: #111;
+.pub.has-asphalt .car-card,
+.canvas.has-asphalt .about-grid > div,
+.pub.has-asphalt .about-grid > div,
+.canvas.has-asphalt .s-logos .logo-pill,
+.pub.has-asphalt .s-logos .logo-pill,
+.canvas.has-asphalt .s-faq .faq-item,
+.pub.has-asphalt .s-faq .faq-item,
+.canvas.has-asphalt .s-quotes .quote,
+.pub.has-asphalt .s-quotes .quote,
+.canvas.has-asphalt .s-hours .hour-row,
+.pub.has-asphalt .s-hours .hour-row {
+  background-color: #161616;
+  background-image: url("../assets/bande-asphalte.png");
+  background-size: 124px 480px;
+  background-repeat: repeat;
+  color: #f3f3f1;
+  border-color: rgba(255,255,255,.14);
 }
-.canvas.has-asphalt .s-contact .rows,
-.pub.has-asphalt .s-contact .rows { color: #ecece8; }
 .canvas.has-asphalt .about-grid > div,
 .pub.has-asphalt .about-grid > div {
-  background: rgba(248, 248, 246, .92);
-  color: #111;
   padding: 22px;
   border-radius: 12px;
 }
+.canvas.has-asphalt .car-card,
+.pub.has-asphalt .car-card {
+  border: 1px solid rgba(255,255,255,.14);
+}
+.canvas.has-asphalt .car-body p,
+.pub.has-asphalt .car-body p {
+  color: #d4d4d0;
+}
+.canvas.has-asphalt .s-contact .rows,
+.pub.has-asphalt .s-contact .rows { color: #ecece8; }
 
 /* published site canvas (also editor) */
 .s-nav, .s-hero, .s-services, .s-about, .s-video, .s-gallery, .s-cta, .s-contact, .s-footer, .s-carousel, .s-media, .s-stats, .s-video-bg, .s-faq, .s-quotes, .s-hours, .s-form, .s-map, .s-logos {
@@ -547,6 +564,14 @@ video::-webkit-media-controls-overlay-play-button {
   background: #fff;
   color: #111;
   border: 1px solid #d1d5db;
+}
+.canvas.has-asphalt .s-form input,
+.canvas.has-asphalt .s-form textarea,
+.pub.has-asphalt .s-form input,
+.pub.has-asphalt .s-form textarea {
+  background: rgba(20, 20, 20, .72);
+  color: #f3f3f1;
+  border: 1px solid rgba(255,255,255,.22);
 }
 .s-map iframe { width: 100%; height: 280px; border: 0; border-radius: 12px; }
 .s-logos .logo-row { display: flex; flex-wrap: wrap; gap: 18px; align-items: center; }
