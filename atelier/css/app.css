@@ -240,15 +240,16 @@ input, textarea, select {
 .canvas-wrap.mobile { max-width: 390px; }
 .canvas { min-height: 100%; }
 
-/* Bande d'asphalte Pavage GO (pavagego.com) — toute la longueur, à la place du blanc */
+/* Photo d'asphalte Pavage GO — pleine largeur, répétée sur toute la longueur */
 .canvas-wrap.has-asphalt,
 .canvas.has-asphalt,
 .pub.has-asphalt {
-  background-color: #121212 !important;
-  background-image: url("../assets/bande-asphalte.png") !important;
-  background-size: 124px 480px;
-  background-repeat: repeat;
-  background-blend-mode: normal;
+  background-color: #111 !important;
+  background-image: url("../assets/asphalte-pavage.jpg") !important;
+  background-repeat: repeat-y !important;
+  background-size: 100% auto !important;
+  background-position: center top !important;
+  background-blend-mode: normal !important;
 }
 .canvas.has-asphalt,
 .pub.has-asphalt {
@@ -263,14 +264,14 @@ input, textarea, select {
 .pub.has-asphalt .s-nav .links { opacity: .9; }
 .canvas.has-asphalt .s-hero.on-canvas,
 .pub.has-asphalt .s-hero.on-canvas {
-  background-color: #6a6a6c;
+  background-color: transparent;
   min-height: 520px;
   align-items: center;
   justify-items: center;
 }
 .canvas.has-asphalt .s-hero.on-canvas.has-mark,
 .pub.has-asphalt .s-hero.on-canvas.has-mark {
-  background-color: #737375;
+  background-color: transparent;
   background-image: var(--hero-logo);
   background-repeat: no-repeat;
   background-position: center 40%;
@@ -315,12 +316,10 @@ input, textarea, select {
 .pub.has-asphalt .s-quotes .quote,
 .canvas.has-asphalt .s-hours .hour-row,
 .pub.has-asphalt .s-hours .hour-row {
-  background-color: #161616;
-  background-image: url("../assets/bande-asphalte.png");
-  background-size: 124px 480px;
-  background-repeat: repeat;
+  background: transparent !important;
+  background-image: none !important;
   color: #f3f3f1;
-  border-color: rgba(255,255,255,.14);
+  border: 1px solid rgba(255,255,255,.18);
 }
 .canvas.has-asphalt .about-grid > div,
 .pub.has-asphalt .about-grid > div {

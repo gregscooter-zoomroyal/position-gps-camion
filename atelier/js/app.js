@@ -2,10 +2,11 @@
   const AUTH_KEY = "atelier-auth-v1";
   const DATA_KEY = "atelier-sites-v2";
   const DATA_KEY_OLD = "atelier-sites-v1";
-  const APP_VERSION = "16";
+  const APP_VERSION = "17";
   const SHARED_KEYS = ["cursor"];
   const SERVER_LOCK = new Set(["site-pavage-go"]);
-  const PAVAGE_LOGO = "assets/logo-pavage-go.png?v=16";
+  const PAVAGE_LOGO = "assets/logo-pavage-go.png?v=17";
+  const PAVAGE_ASPHALT = "assets/asphalte-pavage.jpg?v=17";
   const $ = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 
@@ -182,6 +183,8 @@
     }
     site.pages.forEach(p => { if (!p.id) p.id = uid("page"); });
     if (site.id === "site-pavage-go") {
+      if (!site.theme) site.theme = baseTheme();
+      site.theme.bgImage = PAVAGE_ASPHALT;
       (site.pages || []).forEach(p => {
         (p.sections || []).forEach(s => {
           if (!s.data) return;
@@ -548,21 +551,27 @@
     const accent = hexColor(theme.accent, "#e8a317");
     const bg = hexColor(theme.bg, "#ffffff");
     const text = hexColor(theme.text, "#111827");
-    const img = theme.bgImage ? `url("${theme.bgImage}")` : "none";
+    const pavage = (state.current && state.current.id === "site-pavage-go") || (theme && String(theme.bgImage || "").includes("asphalte"));
+    const asphalt = pavage || !!(theme && theme.bgImage);
     const paint = (el) => {
       if (!el) return;
       el.style.setProperty("--site-primary", primary);
       el.style.setProperty("--site-accent", accent);
       el.style.setProperty("--site-bg", bg);
       el.style.setProperty("--site-text", text);
-      el.style.setProperty("--site-bg-image", img);
-      el.style.color = text;
       el.style.fontFamily = (theme.font || "DM Sans") + ", DM Sans, sans-serif";
-      el.classList.toggle("has-asphalt", !!theme.bgImage);
-      if (theme.bgImage) {
-        el.style.background = "";
-        el.style.backgroundImage = "";
+      el.classList.toggle("has-asphalt", asphalt);
+      if (asphalt) {
+        const url = 'url("' + PAVAGE_ASPHALT + '")';
+        el.style.color = "#f3f3f1";
+        el.style.removeProperty("background");
+        el.style.setProperty("background-color", "#111111", "important");
+        el.style.setProperty("background-image", url, "important");
+        el.style.setProperty("background-repeat", "repeat-y", "important");
+        el.style.setProperty("background-size", "100% auto", "important");
+        el.style.setProperty("background-position", "center top", "important");
       } else {
+        el.style.color = text;
         el.style.background = bg;
         el.style.backgroundImage = "none";
       }
