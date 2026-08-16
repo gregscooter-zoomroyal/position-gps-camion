@@ -2,10 +2,10 @@
   const AUTH_KEY = "atelier-auth-v1";
   const DATA_KEY = "atelier-sites-v2";
   const DATA_KEY_OLD = "atelier-sites-v1";
-  const APP_VERSION = "13";
+  const APP_VERSION = "14";
   const SHARED_KEYS = ["cursor"];
   const SERVER_LOCK = new Set(["site-pavage-go"]);
-  const PAVAGE_LOGO = "assets/logo-pavage-go.png?v=13";
+  const PAVAGE_LOGO = "assets/logo-pavage-go.png?v=14";
   const $ = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 
@@ -281,20 +281,21 @@
   }
 
   function heroLogoSrc(d, site) {
+    if (site && site.id === "site-pavage-go") return PAVAGE_LOGO;
     if (d && d.logo) return d.logo;
     const nav = ((site && site.pages) || []).flatMap(p => p.sections || []).find(s => s.type === "nav");
     if (nav && nav.data && nav.data.logo) return nav.data.logo;
-    if (site && site.id === "site-pavage-go") return PAVAGE_LOGO;
     return "";
   }
 
-  function heroCopy(sec, d, f, editable) {
+  function heroCopy(sec, d, f, editable, markHtml = "") {
     const btn = f("cta", d.cta);
     const href = (d.href || "").trim();
     const inner = href && !editable
       ? `<a class="s-btn" href="${esc(href)}">${btn}</a>`
       : `<span class="s-btn">${btn}</span>`;
     return `<div class="copy">
+      ${markHtml}
       <div class="kicker">${f("kicker", d.kicker)}</div>
       ${f("title", d.title, "h2")}
       ${f("subtitle", d.subtitle, "p")}
@@ -347,18 +348,23 @@
       const img = d.video ? "" : (d.image ? `style="background-image:url('${esc(d.image)}')"` : "");
       const markSrc = heroLogoSrc(d, site);
       const mark = markSrc ? `<img class="hero-mark" src="${esc(markSrc)}" alt="">` : "";
-      return `<div class="s-hero ${d.video ? "has-video" : ""} ${!d.video && !d.image ? "on-canvas" : ""}" ${img}>
+      const onCanvas = !d.video && !d.image;
+      const style = onCanvas && markSrc
+        ? `style="--hero-logo:url('${esc(markSrc)}')"`
+        : img;
+      return `<div class="s-hero ${d.video ? "has-video" : ""} ${onCanvas ? "on-canvas" : ""} ${markSrc ? "has-mark" : ""}" ${style}>
         ${bg}
         ${mark}
-        <div class="shade"></div>
         ${heroCopy(sec, d, f, editable)}
       </div>`;
     }
     if (sec.type === "video-bg") {
+      const markSrc = heroLogoSrc(d, site);
+      const mark = markSrc ? `<img class="hero-mark" src="${esc(markSrc)}" alt="">` : "";
       return `<div class="s-hero s-video-bg has-video">
         <div class="hero-media">${parseVideoBg(d.video)}</div>
         <div class="shade"></div>
-        ${heroCopy(sec, d, f, editable)}
+        ${heroCopy(sec, d, f, editable, mark)}
       </div>`;
     }
     if (sec.type === "stats") {
