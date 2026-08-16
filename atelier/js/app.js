@@ -2,7 +2,7 @@
   const AUTH_KEY = "atelier-auth-v1";
   const DATA_KEY = "atelier-sites-v2";
   const DATA_KEY_OLD = "atelier-sites-v1";
-  const APP_VERSION = "9";
+  const APP_VERSION = "10";
   const SHARED_KEYS = ["cursor"];
   const SERVER_LOCK = new Set(["site-pavage-go"]);
   const $ = (s, r = document) => r.querySelector(s);
@@ -67,7 +67,18 @@
     for (const el of els) {
       const src = await mediaUrl(el.dataset.mediaSrc);
       if (src) el.src = src;
+      if (el.tagName === "VIDEO") {
+        el.muted = true;
+        el.loop = true;
+        el.autoplay = true;
+        el.playsInline = true;
+        el.play().catch(() => {});
+      }
     }
+    root.querySelectorAll("video[autoplay]").forEach(v => {
+      v.muted = true;
+      v.play().catch(() => {});
+    });
   }
 
   function loadSites() {
@@ -208,8 +219,8 @@
     if (m) return `<iframe src="https://www.youtube-nocookie.com/embed/${m[1]}" allowfullscreen allow="encrypted-media"></iframe>`;
     m = raw.match(/vimeo\.com\/(?:video\/)?(\d+)/);
     if (m) return `<iframe src="https://player.vimeo.com/video/${m[1]}" allowfullscreen></iframe>`;
-    if (raw.startsWith("idb:")) return `<video controls playsinline data-media-src="${esc(raw)}"></video>`;
-    return `<video controls playsinline src="${esc(raw)}"></video>`;
+    if (raw.startsWith("idb:")) return `<video autoplay muted loop playsinline data-media-src="${esc(raw)}"></video>`;
+    return `<video autoplay muted loop playsinline src="${esc(raw)}"></video>`;
   }
 
   function parseVideoBg(url) {
@@ -335,11 +346,12 @@
         }
         const fileVid = isFileVideo(it.video);
         const thumb = fileVid
-          ? `<video muted playsinline preload="metadata" data-media-src="${esc(it.video)}"></video>`
-          : `<img src="${esc(it.image)}" alt="">`;
-        return `<figure class="media-card" ${it.video ? `data-open-video="${esc(it.video)}"` : ""} ${editable ? `data-upload="${sec.id}:${i}"` : ""}>
+          ? `<video autoplay muted loop playsinline preload="auto" data-media-src="${esc(it.video)}"></video>`
+          : (it.video
+            ? parseVideo(it.video)
+            : `<img src="${esc(it.image)}" alt="">`);
+        return `<figure class="media-card media-loop">
           ${thumb}
-          ${it.video ? `<span class="media-play">▶</span>` : ""}
           <figcaption>
             <div class="kicker">${f("items." + i + ".kicker", it.kicker)}</div>
             <h4>${f("items." + i + ".title", it.title, "span")}</h4>
