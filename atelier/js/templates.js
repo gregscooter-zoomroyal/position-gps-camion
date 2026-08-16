@@ -269,7 +269,7 @@ const TEMPLATES = [
           id: "home",
           name: "Accueil",
           sections: [
-            section("nav", { brand: name, links: "Services,Entreprise,Contact", logo: "assets/logo-pavage-go.png?v=14" }),
+            section("nav", { brand: name, links: "Services,Entreprise,Contact", logo: "assets/logo-pavage-go.png?v=15" }),
             section("hero", {
               kicker: "Depuis 1993",
               title: name,
@@ -277,7 +277,7 @@ const TEMPLATES = [
               cta: "Demander une estimation",
               image: "",
               video: "",
-              logo: "assets/logo-pavage-go.png?v=14"
+              logo: "assets/logo-pavage-go.png?v=15"
             }),
             section("stats", {
               items: [

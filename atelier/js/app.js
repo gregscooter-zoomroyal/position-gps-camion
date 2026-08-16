@@ -2,10 +2,10 @@
   const AUTH_KEY = "atelier-auth-v1";
   const DATA_KEY = "atelier-sites-v2";
   const DATA_KEY_OLD = "atelier-sites-v1";
-  const APP_VERSION = "14";
+  const APP_VERSION = "15";
   const SHARED_KEYS = ["cursor"];
   const SERVER_LOCK = new Set(["site-pavage-go"]);
-  const PAVAGE_LOGO = "assets/logo-pavage-go.png?v=14";
+  const PAVAGE_LOGO = "assets/logo-pavage-go.png?v=15";
   const $ = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 
@@ -106,7 +106,13 @@
     for (const el of els) {
       const src = await mediaUrl(el.dataset.mediaSrc);
       if (src) el.src = src;
-      armVideo(el);
+      if (el.tagName === "VIDEO") armVideo(el);
+    }
+    const hosts = [...root.querySelectorAll("[data-logo-host]")];
+    for (const host of hosts) {
+      const ref = host.dataset.logoHost;
+      const src = await mediaUrl(ref);
+      if (src) host.style.setProperty("--hero-logo", "url(\"" + src + "\")");
     }
     kickVideos(root);
   }
@@ -179,7 +185,7 @@
       (site.pages || []).forEach(p => {
         (p.sections || []).forEach(s => {
           if (!s.data) return;
-          if ((s.type === "nav" || s.type === "hero") && (!s.data.logo || String(s.data.logo).includes("logo-pavage-go"))) {
+          if ((s.type === "nav" || s.type === "hero") && (!s.data.logo || (String(s.data.logo).includes("logo-pavage-go") && !String(s.data.logo).startsWith("idb:")))) {
             s.data.logo = PAVAGE_LOGO;
           }
         });
@@ -280,11 +286,23 @@
     return `<video class="bg-video" ${loopAttrs()} src="${esc(raw)}"></video>`;
   }
 
+  function isLocalRef(url) {
+    return String(url || "").startsWith("idb:");
+  }
+
+  function imgTag(src, className) {
+    if (!src) return "";
+    const cls = className ? ` class="${className}"` : "";
+    if (isLocalRef(src)) return `<img${cls} alt="" data-media-src="${esc(src)}">`;
+    return `<img${cls} alt="" src="${esc(src)}">`;
+  }
+
   function heroLogoSrc(d, site) {
-    if (site && site.id === "site-pavage-go") return PAVAGE_LOGO;
     if (d && d.logo) return d.logo;
+    if (d && d.image && isLocalRef(d.image)) return d.image;
     const nav = ((site && site.pages) || []).flatMap(p => p.sections || []).find(s => s.type === "nav");
     if (nav && nav.data && nav.data.logo) return nav.data.logo;
+    if (site && site.id === "site-pavage-go") return PAVAGE_LOGO;
     return "";
   }
 
@@ -317,7 +335,7 @@
 
   function navMarkup(sec, d, f, editable, site, preview) {
     const src = d.logo || (site && site.id === "site-pavage-go" ? PAVAGE_LOGO : "");
-    const logo = src ? `<img src="${esc(src)}" alt="">` : "";
+    const logo = imgTag(src, "");
     const brand = `<div class="brand-wrap">${logo}${f("brand", d.brand, "span")}</div>`;
     if (editable) {
       return `<div class="s-nav">${brand}<div class="links">${f("links", d.links, "span")}</div></div>`;
@@ -345,14 +363,16 @@
       const bg = d.video
         ? `<div class="hero-media">${parseVideoBg(d.video)}</div>`
         : "";
-      const img = d.video ? "" : (d.image ? `style="background-image:url('${esc(d.image)}')"` : "");
+      const photo = d.image && !isLocalRef(d.image) ? d.image : "";
+      const img = d.video ? "" : (photo ? `style="background-image:url('${esc(photo)}')"` : "");
       const markSrc = heroLogoSrc(d, site);
-      const mark = markSrc ? `<img class="hero-mark" src="${esc(markSrc)}" alt="">` : "";
-      const onCanvas = !d.video && !d.image;
-      const style = onCanvas && markSrc
+      const mark = imgTag(markSrc, "hero-mark");
+      const onCanvas = !d.video && !photo;
+      const host = markSrc ? ` data-logo-host="${esc(markSrc)}"` : "";
+      const style = onCanvas && markSrc && !isLocalRef(markSrc)
         ? `style="--hero-logo:url('${esc(markSrc)}')"`
         : img;
-      return `<div class="s-hero ${d.video ? "has-video" : ""} ${onCanvas ? "on-canvas" : ""} ${markSrc ? "has-mark" : ""}" ${style}>
+      return `<div class="s-hero ${d.video ? "has-video" : ""} ${onCanvas ? "on-canvas" : ""} ${markSrc ? "has-mark" : ""}" ${style}${host}>
         ${bg}
         ${mark}
         ${heroCopy(sec, d, f, editable)}
@@ -360,7 +380,7 @@
     }
     if (sec.type === "video-bg") {
       const markSrc = heroLogoSrc(d, site);
-      const mark = markSrc ? `<img class="hero-mark" src="${esc(markSrc)}" alt="">` : "";
+      const mark = imgTag(markSrc, "hero-mark");
       return `<div class="s-hero s-video-bg has-video">
         <div class="hero-media">${parseVideoBg(d.video)}</div>
         <div class="shade"></div>
@@ -830,7 +850,21 @@
       const block = currentPage().sections.find(s => s.id === uploadTarget.url);
       if (block) block.data.url = ref;
     } else if (uploadTarget.path && currentSection()) {
-      setPath(currentSection().data, uploadTarget.path, ref);
+      const sec = currentSection();
+      const isPic = (file.type || "").startsWith("image/");
+      if (isPic && (uploadTarget.path === "logo" || uploadTarget.path === "image") && sec.type === "hero") {
+        sec.data.logo = ref;
+        sec.data.image = "";
+      } else {
+        setPath(sec.data, uploadTarget.path, ref);
+      }
+      if (isPic && uploadTarget.path === "logo" && sec.type === "nav") {
+        const hero = currentPage().sections.find(s => s.type === "hero");
+        if (hero && hero.data) {
+          hero.data.logo = ref;
+          if (isLocalRef(hero.data.image)) hero.data.image = "";
+        }
+      }
     }
     persistSite();
     renderEditor();
