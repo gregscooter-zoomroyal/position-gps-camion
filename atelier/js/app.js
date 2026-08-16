@@ -2,10 +2,10 @@
   const AUTH_KEY = "atelier-auth-v1";
   const DATA_KEY = "atelier-sites-v2";
   const DATA_KEY_OLD = "atelier-sites-v1";
-  const APP_VERSION = "15";
+  const APP_VERSION = "16";
   const SHARED_KEYS = ["cursor"];
   const SERVER_LOCK = new Set(["site-pavage-go"]);
-  const PAVAGE_LOGO = "assets/logo-pavage-go.png?v=15";
+  const PAVAGE_LOGO = "assets/logo-pavage-go.png?v=16";
   const $ = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 
