@@ -269,14 +269,15 @@ const TEMPLATES = [
           id: "home",
           name: "Accueil",
           sections: [
-            section("nav", { brand: name, links: "Services,Entreprise,Contact" }),
+            section("nav", { brand: name, links: "Services,Entreprise,Contact", logo: "assets/logo-pavage-go.png" }),
             section("hero", {
               kicker: "Depuis 1993",
               title: name,
               subtitle: "Pose, réparation et entretien d'asphalte. Une visite, un devis clair.",
               cta: "Demander une estimation",
               image: "",
-              video: ""
+              video: "",
+              logo: "assets/logo-pavage-go.png"
             }),
             section("stats", {
               items: [
@@ -394,7 +395,7 @@ const SITE_FONTS = ["DM Sans", "Inter", "Barlow", "Playfair Display", "Cormorant
 function blankSection(type, brand) {
   const map = {
     nav: { brand: brand || "Marque", links: "Accueil,Services,Contact", logo: "" },
-    hero: { kicker: "Accroche", title: "Titre principal", subtitle: "Une phrase claire sur l'offre.", cta: "Appel à l'action", href: "", image: "https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=1600&q=80", video: "" },
+    hero: { kicker: "Accroche", title: "Titre principal", subtitle: "Une phrase claire sur l'offre.", cta: "Appel à l'action", href: "", image: "https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=1600&q=80", video: "", logo: "" },
     "video-bg": { kicker: "Vidéo", title: "Titre sur la vidéo", subtitle: "Le texte reste lisible, la vidéo joue derrière.", cta: "En savoir plus", href: "", video: "https://videos.pexels.com/video-files/3571264/3571264-hd_1920_1080_30fps.mp4" },
     stats: { items: [{ value: "1993", label: "Depuis" }, { value: "100%", label: "Sur place" }, { value: "RBQ", label: "Licence" }] },
     carousel: { title: "En vedette", cards: [
