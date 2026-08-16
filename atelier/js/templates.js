@@ -427,7 +427,7 @@ function blankSection(type, brand) {
       { day: "Dimanche", time: "Fermé" }
     ] },
     form: { title: "Écrivez-nous", button: "Envoyer", mailto: "" },
-    map: { title: "Nous trouver", query: "83 route 139, Roxton Pond, Québec" },
+    map: { title: "Nous trouver", query: "14 rue Drummond, Granby, Québec" },
     cta: { title: "Prêt à commencer ?", button: "Nous écrire", href: "" },
     contact: { title: "Contact", address: "Adresse", phone: "Téléphone", email: "courriel@exemple.com" },
     footer: { brand: brand || "Marque", note: "Tous droits réservés." }

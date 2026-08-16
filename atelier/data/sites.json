@@ -5,7 +5,7 @@
     "name": "Pavage G.O.",
     "client": "PAVAGE G.O. 9145-7697 QUÉBEC INC.",
     "cover": "assets/asphalte.jpg",
-    "revision": 6,
+    "revision": 7,
     "updated": "2026-08-16",
     "published": false,
     "seo": {
@@ -146,7 +146,7 @@
             "type": "map",
             "data": {
               "title": "Nous trouver",
-              "query": "83 route 139, Roxton Pond, Québec J0E 1Z0"
+              "query": "14 rue Drummond, Granby, Québec"
             }
           },
           {
@@ -163,7 +163,7 @@
             "type": "contact",
             "data": {
               "title": "Contact",
-              "address": "83, route 139, Roxton Pond (Québec) J0E 1Z0 — Granby, Bromont, Waterloo, Shefford, Cowansville, Haute-Yamaska, Estrie",
+              "address": "14, rue Drummond, Granby (Québec) — Granby, Bromont, Waterloo, Shefford, Cowansville, Haute-Yamaska, Estrie",
               "phone": "450 378-2117 · Bureau 8 h – 18 h",
               "email": "RBQ 8315-8170-41 · APCHQ · PAVAGE G.O. 9145-7697 QUÉBEC INC."
             }
