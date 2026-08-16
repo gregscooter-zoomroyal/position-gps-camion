@@ -241,16 +241,16 @@ input, textarea, select {
 .canvas-wrap.mobile { max-width: 390px; }
 .canvas { min-height: 100%; }
 
-/* Bande d'asphalte calibrée sur le bandeau pavagego.com (charcoal lum ~54) */
+/* Toile d'asphalte : carreau gris granuleux (comme avant le recadrage brun) */
 .workspace.has-asphalt,
 .canvas-wrap.has-asphalt,
 .canvas.has-asphalt,
 .pub.has-asphalt {
-  background-color: #37362f !important;
+  background-color: #3a3a3a !important;
   background-image: url("../assets/asphalte-bande.jpg") !important;
-  background-repeat: repeat-y !important;
-  background-size: 100% auto !important;
-  background-position: center top !important;
+  background-repeat: repeat !important;
+  background-size: 420px 420px !important;
+  background-position: 0 0 !important;
   background-blend-mode: normal !important;
 }
 .canvas.has-asphalt,
@@ -274,10 +274,7 @@ input, textarea, select {
 .canvas.has-asphalt .s-hero.on-canvas.has-mark,
 .pub.has-asphalt .s-hero.on-canvas.has-mark {
   background-color: transparent;
-  background-image: var(--hero-logo);
-  background-repeat: no-repeat;
-  background-position: center 40%;
-  background-size: auto 78%;
+  background-image: none;
 }
 .canvas.has-asphalt .s-hero.on-canvas .shade,
 .pub.has-asphalt .s-hero.on-canvas .shade {
@@ -418,20 +415,21 @@ input, textarea, select {
 .s-hero .hero-mark {
   position: absolute;
   left: 50%;
-  top: 46%;
-  transform: translate(-50%, -58%);
-  width: min(360px, 72%);
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(380px, 70%);
   height: auto;
-  z-index: 1;
+  z-index: 2;
   pointer-events: none;
   opacity: 1;
+  object-fit: contain;
 }
 .s-hero.on-canvas.has-mark .hero-mark {
   display: block;
   z-index: 2;
-  top: 50%;
-  transform: translate(-50%, -58%);
-  width: min(420px, 80%);
+  top: 48%;
+  transform: translate(-50%, -50%);
+  width: min(440px, 78%);
 }
 .s-hero .shade { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,.2), rgba(0,0,0,.72)); z-index: 2; }
 .s-hero .copy .kicker,

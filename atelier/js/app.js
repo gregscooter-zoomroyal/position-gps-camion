@@ -2,11 +2,11 @@
   const AUTH_KEY = "atelier-auth-v1";
   const DATA_KEY = "atelier-sites-v2";
   const DATA_KEY_OLD = "atelier-sites-v1";
-  const APP_VERSION = "21";
+  const APP_VERSION = "22";
   const SHARED_KEYS = ["cursor"];
   const SERVER_LOCK = new Set(["site-pavage-go"]);
-  const PAVAGE_LOGO = "assets/logo-pavage-go.png?v=21";
-  const PAVAGE_ASPHALT = "assets/asphalte-bande.jpg?v=21";
+  const PAVAGE_LOGO = "assets/logo-pavage-go.png?v=22";
+  const PAVAGE_ASPHALT = "assets/asphalte-bande.jpg?v=22";
   const DOCK_TYPES = new Set(["services", "about", "contact", "carousel", "media", "video", "gallery", "faq", "quotes", "hours", "form", "map", "logos"]);
   const $ = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -395,15 +395,11 @@
       const markSrc = heroLogoSrc(d, site);
       const mark = imgTag(markSrc, "hero-mark");
       const onCanvas = !hasVid && !hasPhoto;
-      const host = markSrc ? ` data-logo-host="${esc(markSrc)}"` : "";
-      const style = onCanvas && markSrc && !isLocalRef(markSrc)
-        ? `style="--hero-logo:url('${esc(markSrc)}')"`
-        : "";
       const pickHero = editable ? ` data-upload-hero="${sec.id}"` : "";
       const addBtn = editable
         ? `<button class="video-replace" type="button" data-upload-hero="${sec.id}">Photo ou MP4</button>`
         : "";
-      return `<div class="s-hero ${hasVid ? "has-video" : ""} ${hasPhoto ? "has-photo" : ""} ${onCanvas ? "on-canvas" : ""} ${markSrc ? "has-mark" : ""}" ${style}${host}${pickHero}>
+      return `<div class="s-hero ${hasVid ? "has-video" : ""} ${hasPhoto ? "has-photo" : ""} ${onCanvas ? "on-canvas" : ""} ${markSrc ? "has-mark" : ""}"${pickHero}>
         ${bg}
         ${mark}
         ${addBtn}
@@ -614,11 +610,11 @@
         const url = 'url("' + PAVAGE_ASPHALT + '")';
         el.style.color = "#f3f3f1";
         el.style.removeProperty("background");
-        el.style.setProperty("background-color", "#37362f", "important");
+        el.style.setProperty("background-color", "#3a3a3a", "important");
         el.style.setProperty("background-image", url, "important");
-        el.style.setProperty("background-repeat", "repeat-y", "important");
-        el.style.setProperty("background-size", "100% auto", "important");
-        el.style.setProperty("background-position", "center top", "important");
+        el.style.setProperty("background-repeat", "repeat", "important");
+        el.style.setProperty("background-size", "420px 420px", "important");
+        el.style.setProperty("background-position", "0 0", "important");
       } else {
         el.style.color = text;
         el.style.background = bg;
