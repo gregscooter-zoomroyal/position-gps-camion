@@ -2,9 +2,7 @@ name: Deploy GitHub Pages
 
 on:
   push:
-    branches:
-      - master
-      - cursor/language-switcher-ca-us-mx-774c
+    branches: [master]
   workflow_dispatch:
 
 permissions:
