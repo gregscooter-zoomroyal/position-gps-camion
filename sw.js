@@ -2,11 +2,12 @@
  * Service worker Position · GPS Camion
  * Cache-first pour les assets statiques, network-first pour les navigations.
  */
-var CACHE_NAME = 'position-gps-v18';
+var CACHE_NAME = 'position-gps-v19';
 
 var STATIC_ASSETS = [
   './',
   './index.html',
+  './i18n.js',
   './nav-pro.js',
   './truck-network.js',
   './auth.js',

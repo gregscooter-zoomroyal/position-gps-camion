@@ -272,16 +272,23 @@
     flex-direction: column;
     align-items: center;
     gap: 3px;
-    padding: 8px 4px 10px;
+    padding: 8px 2px 10px;
     background: transparent;
     border: none;
     color: var(--text-dim);
     font-family: 'Space Grotesk', sans-serif;
-    font-size: 10px;
+    font-size: 9px;
     font-weight: 500;
     letter-spacing: 0.02em;
     cursor: pointer;
     width: auto;
+    min-width: 0;
+  }
+  .tab-btn span {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .tab-btn svg {
     width: 22px;
@@ -298,6 +305,51 @@
   }
   .tab-btn.active { color: var(--amber); }
   .tab-btn:active { opacity: 0.7; }
+
+  .lang-country { margin: 4px 0 18px; }
+  .lang-country-name {
+    font-size: 12px;
+    font-weight: 700;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .lang-country-name .flag { font-size: 18px; line-height: 1; }
+  .lang-btn {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 8px;
+    padding: 12px 14px;
+    text-align: left;
+    background: var(--panel-2);
+    color: var(--text);
+    border: 1px solid var(--line);
+  }
+  .lang-btn .lang-native {
+    font-weight: 700;
+    font-size: 15px;
+  }
+  .lang-btn .lang-meta {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    color: var(--text-dim);
+    margin-top: 2px;
+  }
+  .lang-btn.active {
+    border-color: var(--amber);
+    color: var(--amber);
+    box-shadow: 0 0 0 1px var(--amber-dim);
+  }
+  .lang-btn .lang-check {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    color: var(--amber);
+    flex-shrink: 0;
+  }
 
   /* ── Panel sections ── */
   .panel-title {
@@ -767,7 +819,7 @@
 <body>
 
 <header>
-  <div class="title">Position<span>·</span>GPS <span class="badge">Camion</span></div>
+  <div class="title">Position<span>·</span>GPS <span class="badge" data-i18n="brand.badge">Camion</span></div>
   <div id="status"><span class="dot"></span>en attente</div>
 </header>
 
@@ -777,22 +829,22 @@
     <div class="guidance-row">
       <div class="guidance-copy">
         <div class="dist" id="guidance-dist">—</div>
-        <div class="instr" id="guidance-instr">En attente d'itinéraire</div>
+        <div class="instr" id="guidance-instr" data-i18n="guidance.wait">En attente d'itinéraire</div>
         <div class="street" id="guidance-street"></div>
       </div>
       <div id="guidance-shields" aria-hidden="true"></div>
     </div>
   </div>
-  <div id="speed-limit-badge" title="Limitation">—</div>
+  <div id="speed-limit-badge" data-i18n-title="speedLimit.title" title="Limitation">—</div>
   <div id="lane-info"></div>
   <div id="nav-hud">
-    <div class="hud-cell"><div class="hud-label">Vitesse</div><div class="hud-value" id="hud-speed">—</div></div>
-    <div class="hud-cell"><div class="hud-label">Limite</div><div class="hud-value" id="hud-limit">—</div></div>
-    <div class="hud-cell"><div class="hud-label">ETA</div><div class="hud-value" id="hud-eta">—</div></div>
+    <div class="hud-cell"><div class="hud-label" data-i18n="hud.speed">Vitesse</div><div class="hud-value" id="hud-speed">—</div></div>
+    <div class="hud-cell"><div class="hud-label" data-i18n="hud.limit">Limite</div><div class="hud-value" id="hud-limit">—</div></div>
+    <div class="hud-cell"><div class="hud-label" data-i18n="hud.eta">ETA</div><div class="hud-value" id="hud-eta">—</div></div>
   </div>
   <div id="fab-row">
-    <button type="button" id="fab-nav" title="Mode navigation">NAV</button>
-    <button type="button" id="fab-share" class="stop" title="Partager">↗</button>
+    <button type="button" id="fab-nav" data-i18n-title="fab.nav" title="Mode navigation">NAV</button>
+    <button type="button" id="fab-share" class="stop" data-i18n-title="fab.share" title="Partager">↗</button>
   </div>
 </div>
 
@@ -808,10 +860,10 @@
         </div>
         <svg id="compass" viewBox="0 0 100 100">
           <circle cx="50" cy="50" r="46" fill="none" stroke="#23303B" stroke-width="2"/>
-          <text x="50" y="16" fill="#6B7A87" font-size="10" font-family="Space Mono" text-anchor="middle">N</text>
-          <text x="50" y="90" fill="#6B7A87" font-size="10" font-family="Space Mono" text-anchor="middle">S</text>
-          <text x="12" y="54" fill="#6B7A87" font-size="10" font-family="Space Mono" text-anchor="middle">O</text>
-          <text x="88" y="54" fill="#6B7A87" font-size="10" font-family="Space Mono" text-anchor="middle">E</text>
+          <text id="compass-n" x="50" y="16" fill="#6B7A87" font-size="10" font-family="Space Mono" text-anchor="middle" data-i18n="compass.n">N</text>
+          <text id="compass-s" x="50" y="90" fill="#6B7A87" font-size="10" font-family="Space Mono" text-anchor="middle" data-i18n="compass.s">S</text>
+          <text id="compass-w" x="12" y="54" fill="#6B7A87" font-size="10" font-family="Space Mono" text-anchor="middle" data-i18n="compass.w">O</text>
+          <text id="compass-e" x="88" y="54" fill="#6B7A87" font-size="10" font-family="Space Mono" text-anchor="middle" data-i18n="compass.e">E</text>
           <g id="needle" transform="rotate(0 50 50)">
             <polygon points="50,16 44,54 56,54" fill="#FFB238"/>
             <circle cx="50" cy="50" r="4" fill="#E7EDF2"/>
@@ -820,196 +872,202 @@
       </div>
       <div class="grid">
         <div class="cell">
-          <div class="label">Vitesse</div>
+          <div class="label" data-i18n="label.speed">Vitesse</div>
           <div class="value" id="speed">—<span class="unit">km/h</span></div>
         </div>
         <div class="cell">
-          <div class="label">Altitude</div>
+          <div class="label" data-i18n="label.alt">Altitude</div>
           <div class="value" id="alt">—<span class="unit">m</span></div>
         </div>
         <div class="cell">
-          <div class="label">Précision</div>
+          <div class="label" data-i18n="label.acc">Précision</div>
           <div class="value" id="acc">—<span class="unit">m</span></div>
         </div>
       </div>
       <button id="toggle">Activer la localisation</button>
-      <div id="accuracy-note">GPS camion uniquement (CA · US · MX). Autorise la position sur ton appareil — rien n'est envoyé ailleurs.</div>
-      <div class="panel-title">Profil véhicule</div>
+      <div id="accuracy-note" data-i18n="accuracy.note">GPS camion uniquement (CA · US · MX). Autorise la position sur ton appareil — rien n'est envoyé ailleurs.</div>
+      <div class="panel-title" data-i18n="panel.vehicle">Profil véhicule</div>
       <select id="vehicle-profile">
-        <option value="drybox">Drybox (4,15 m)</option>
-        <option value="plateau">Plateau</option>
-        <option value="fourgon">Fourgon</option>
-        <option value="custom">Personnalisé</option>
+        <option value="drybox" data-i18n="vehicle.drybox">Drybox (4,15 m)</option>
+        <option value="plateau" data-i18n="vehicle.plateau">Plateau</option>
+        <option value="fourgon" data-i18n="vehicle.fourgon">Fourgon</option>
+        <option value="custom" data-i18n="vehicle.custom">Personnalisé</option>
       </select>
       <div id="custom-vehicle" style="display:none;">
-        <input type="number" id="veh-height" step="0.01" placeholder="Hauteur m">
-        <input type="number" id="veh-width" step="0.01" placeholder="Largeur m">
-        <input type="number" id="veh-length" step="0.01" placeholder="Longueur m">
-        <input type="number" id="veh-weight" step="0.1" placeholder="Masse t">
-        <button type="button" id="veh-save">Enregistrer le profil</button>
+        <input type="number" id="veh-height" step="0.01" data-i18n-placeholder="veh.height" placeholder="Hauteur m">
+        <input type="number" id="veh-width" step="0.01" data-i18n-placeholder="veh.width" placeholder="Largeur m">
+        <input type="number" id="veh-length" step="0.01" data-i18n-placeholder="veh.length" placeholder="Longueur m">
+        <input type="number" id="veh-weight" step="0.1" data-i18n-placeholder="veh.weight" placeholder="Masse t">
+        <button type="button" id="veh-save" data-i18n="veh.save">Enregistrer le profil</button>
       </div>
       <div class="vehicle-card" id="vehicle-card">
-        Profil camion actif<br>
+        <span data-i18n="vehicle.active">Profil camion actif</span><br>
         <strong id="vehicle-summary">—</strong><br>
-        Les ponts trop bas sont évités automatiquement.
+        <span data-i18n="vehicle.bridgesAvoided">Les ponts trop bas sont évités automatiquement.</span>
       </div>
     </div>
 
     <div class="tab-panel" data-panel="go">
-      <div class="panel-title">Point de départ</div>
+      <div class="panel-title" data-i18n="panel.origin">Point de départ</div>
       <div class="toggle-group">
-        <button id="origin-gps" class="active">Ma position</button>
-        <button id="origin-manual">Adresse</button>
+        <button id="origin-gps" class="active" data-i18n="origin.gps">Ma position</button>
+        <button id="origin-manual" data-i18n="origin.address">Adresse</button>
       </div>
       <div id="origin-address-row" style="display:none;">
         <div class="search-row">
           <div class="search-wrap">
-            <input type="text" id="origin-input" placeholder="Ex. 123 rue Principale, Granby" autocomplete="off">
+            <input type="text" id="origin-input" data-i18n-placeholder="origin.placeholder" placeholder="Ex. 123 rue Principale, Granby" autocomplete="off">
             <div class="suggestions" id="origin-suggestions"></div>
           </div>
-          <button id="origin-search">Valider</button>
+          <button id="origin-search" data-i18n="origin.validate">Valider</button>
         </div>
         <div class="field-error" id="origin-error"></div>
       </div>
-      <div class="panel-title">Étapes intermédiaires</div>
+      <div class="panel-title" data-i18n="panel.waypoints">Étapes intermédiaires</div>
       <div id="waypoints-list"></div>
-      <button type="button" id="waypoint-add" class="stop">Ajouter une étape</button>
+      <button type="button" id="waypoint-add" class="stop" data-i18n="waypoint.add">Ajouter une étape</button>
 
-      <div class="panel-title">Destination</div>
+      <div class="panel-title" data-i18n="panel.dest">Destination</div>
       <div class="search-row">
         <div class="search-wrap">
-          <input type="text" id="dest-input" placeholder="Adresse de destination (CA / US / MX)" autocomplete="off">
+          <input type="text" id="dest-input" data-i18n-placeholder="dest.placeholder" placeholder="Adresse de destination (CA / US / MX)" autocomplete="off">
           <div class="suggestions" id="dest-suggestions"></div>
         </div>
-        <button id="dest-search">Chercher</button>
+        <button id="dest-search" data-i18n="dest.search">Chercher</button>
       </div>
       <div class="field-error" id="dest-error"></div>
-      <div class="dest-hint" id="dest-hint">Ou touche la carte. L'itinéraire camion se calcule dès que départ et destination sont prêts.</div>
+      <div class="dest-hint" id="dest-hint" data-i18n="dest.hint">Ou touche la carte. L'itinéraire camion se calcule dès que départ et destination sont prêts.</div>
       <div id="dest-active" style="display:none;">
         <div class="dest-info">
           <div>
-            <div class="lbl">À vol d'oiseau</div>
+            <div class="lbl" data-i18n="dest.straight">À vol d'oiseau</div>
             <div id="dest-dist">—</div>
           </div>
           <div>
-            <div class="lbl">Cap</div>
+            <div class="lbl" data-i18n="dest.bearing">Cap</div>
             <div id="dest-bearing">—</div>
           </div>
           <div>
-            <div class="lbl">Itinéraire</div>
+            <div class="lbl" data-i18n="dest.route">Itinéraire</div>
             <div id="route-summary">—</div>
           </div>
         </div>
-        <button id="route-calc">Recalculer l'itinéraire camion</button>
+        <button id="route-calc" data-i18n="route.recalc">Recalculer l'itinéraire camion</button>
         <div class="voice-row">
           <button id="voice-toggle" type="button">Voix : activée</button>
-          <button id="voice-test" class="stop" type="button">Tester la voix</button>
+          <button id="voice-test" class="stop" type="button" data-i18n="voice.test">Tester la voix</button>
         </div>
         <div class="truck-note" id="route-note"></div>
         <div id="eta-traffic"></div>
         <div class="btn-row" style="margin-top:8px;">
-          <button type="button" id="fav-save-dest">★ Favori</button>
-          <button type="button" id="share-eta" class="stop">Partager ETA</button>
+          <button type="button" id="fav-save-dest" data-i18n="fav.save">★ Favori</button>
+          <button type="button" id="share-eta" class="stop" data-i18n="share.eta">Partager ETA</button>
         </div>
-        <button id="dest-clear" class="stop">Annuler la destination</button>
+        <button id="dest-clear" class="stop" data-i18n="dest.clear">Annuler la destination</button>
       </div>
 
-      <div class="panel-title">Éviter</div>
+      <div class="panel-title" data-i18n="panel.avoid">Éviter</div>
       <div class="check-list">
-        <label><input type="checkbox" id="opt-tolls"> Péages</label>
-        <label><input type="checkbox" id="opt-ferries"> Traversiers / ferries</label>
-        <label><input type="checkbox" id="opt-borders" checked> Même pays = sans frontière (CA/US/MX)</label>
-        <label><input type="checkbox" id="opt-traffic" checked> ETA avec trafic estimé</label>
+        <label><input type="checkbox" id="opt-tolls"> <span data-i18n="opt.tolls">Péages</span></label>
+        <label><input type="checkbox" id="opt-ferries"> <span data-i18n="opt.ferries">Traversiers / ferries</span></label>
+        <label><input type="checkbox" id="opt-borders" checked> <span data-i18n="opt.borders">Même pays = sans frontière (CA/US/MX)</span></label>
+        <label><input type="checkbox" id="opt-traffic" checked> <span data-i18n="opt.traffic">ETA avec trafic estimé</span></label>
       </div>
     </div>
 
     <div class="tab-panel" data-panel="zones">
-      <div class="panel-title">Zones sur la carte</div>
+      <div class="panel-title" data-i18n="panel.zones">Zones sur la carte</div>
       <div class="truck-legend">
-        <div><span class="swatch" style="background:#4ADE80;"></span>Industriel / navigable camion</div>
-        <div><span class="swatch" style="background:#FF3B3B;"></span>Quartiers résidentiels / interdites</div>
-        <div><span class="swatch dot" style="background:#FFB238;"></span>Pont bas (selon profil)</div>
+        <div><span class="swatch" style="background:#4ADE80;"></span><span data-i18n="legend.industrial">Industriel / navigable camion</span></div>
+        <div><span class="swatch" style="background:#FF3B3B;"></span><span data-i18n="legend.residential">Quartiers résidentiels / interdites</span></div>
+        <div><span class="swatch dot" style="background:#FFB238;"></span><span data-i18n="legend.lowBridge">Pont bas (selon profil)</span></div>
       </div>
-      <div class="truck-note" id="truck-note">Les quartiers industriels (CA/US/MX) sont permis aux camions (vert). Zoome pour les ponts bas.</div>
+      <div class="truck-note" id="truck-note" data-i18n="truck.note">Les quartiers industriels (CA/US/MX) sont permis aux camions (vert). Zoome pour les ponts bas.</div>
 
-      <div class="panel-title">Réseau camion officiel (CA / US / MX)</div>
+      <div class="panel-title" data-i18n="panel.network">Réseau camion officiel (CA / US / MX)</div>
       <div class="check-list">
-        <label><input type="checkbox" id="net-official" checked> Afficher réseau officiel</label>
-        <label><input type="checkbox" id="net-exclude" checked> Éviter no-truck officiels à l'itinéraire</label>
+        <label><input type="checkbox" id="net-official" checked> <span data-i18n="net.official">Afficher réseau officiel</span></label>
+        <label><input type="checkbox" id="net-exclude" checked> <span data-i18n="net.exclude">Éviter no-truck officiels à l'itinéraire</span></label>
       </div>
       <div class="truck-legend">
-        <div><span class="swatch" style="background:#4ADE80;"></span>Transit / National Network / Industriel</div>
-        <div><span class="swatch" style="background:#FFB238;"></span>Restreint / partiel</div>
-        <div><span class="swatch" style="background:#FF3B3B;"></span>Interdit (no truck)</div>
+        <div><span class="swatch" style="background:#4ADE80;"></span><span data-i18n="legend.transit">Transit / National Network / Industriel</span></div>
+        <div><span class="swatch" style="background:#FFB238;"></span><span data-i18n="legend.restricted">Restreint / partiel</span></div>
+        <div><span class="swatch" style="background:#FF3B3B;"></span><span data-i18n="legend.forbidden">Interdit (no truck)</span></div>
       </div>
-      <div class="truck-note" id="net-note">MTQ + USDOT + quartiers industriels OSM (CA/US/MX) en vert. MX officiel : lien Pro.</div>
+      <div class="truck-note" id="net-note" data-i18n="net.note">MTQ + USDOT + quartiers industriels OSM (CA/US/MX) en vert. MX officiel : lien Pro.</div>
 
-      <div class="panel-title">Points d'intérêt camion</div>
+      <div class="panel-title" data-i18n="panel.poi">Points d'intérêt camion</div>
       <div class="check-list">
-        <label><input type="checkbox" id="poi-fuel"> Stations-service</label>
-        <label><input type="checkbox" id="poi-parking"> Stationnements PL</label>
-        <label><input type="checkbox" id="poi-rest"> Aires de repos / services</label>
-        <label><input type="checkbox" id="poi-weigh"> Pesées</label>
+        <label><input type="checkbox" id="poi-fuel"> <span data-i18n="poi.fuel">Stations-service</span></label>
+        <label><input type="checkbox" id="poi-parking"> <span data-i18n="poi.parking">Stationnements PL</span></label>
+        <label><input type="checkbox" id="poi-rest"> <span data-i18n="poi.rest">Aires de repos / services</span></label>
+        <label><input type="checkbox" id="poi-weigh"> <span data-i18n="poi.weigh">Pesées</span></label>
       </div>
-      <div class="truck-note" id="poi-note">Active une catégorie pour la charger sur la carte (OpenStreetMap).</div>
+      <div class="truck-note" id="poi-note" data-i18n="poi.note">Active une catégorie pour la charger sur la carte (OpenStreetMap).</div>
     </div>
 
     <div class="tab-panel" data-panel="trajet">
-      <div class="panel-title">Trajet</div>
+      <div class="panel-title" data-i18n="panel.trip">Trajet</div>
       <div class="grid two-col">
         <div class="cell">
-          <div class="label">Distance parcourue</div>
+          <div class="label" data-i18n="track.distance">Distance parcourue</div>
           <div class="value" id="track-dist">0<span class="unit">m</span></div>
         </div>
         <div class="cell">
-          <div class="label">Points enregistrés</div>
+          <div class="label" data-i18n="track.points">Points enregistrés</div>
           <div class="value" id="track-points">0</div>
         </div>
       </div>
       <div class="btn-row">
-        <button id="track-toggle">Suivre le trajet</button>
-        <button id="track-export" disabled>Exporter GPX</button>
+        <button id="track-toggle" data-i18n="track.follow">Suivre le trajet</button>
+        <button id="track-export" disabled data-i18n="track.export">Exporter GPX</button>
       </div>
       <div class="btn-row" style="margin-top:8px;">
-        <button id="track-clear" class="stop">Effacer le trajet</button>
+        <button id="track-clear" class="stop" data-i18n="track.clear">Effacer le trajet</button>
       </div>
 
-      <div class="panel-title">Historique des trajets</div>
+      <div class="panel-title" data-i18n="panel.history">Historique des trajets</div>
       <div id="history-list"></div>
-      <button type="button" id="history-clear" class="stop">Effacer l'historique</button>
+      <button type="button" id="history-clear" class="stop" data-i18n="history.clear">Effacer l'historique</button>
     </div>
 
     <div class="tab-panel" data-panel="pro">
-      <div class="panel-title">Favoris &amp; adresses</div>
+      <div class="panel-title" data-i18n="panel.favorites">Favoris &amp; adresses</div>
       <div class="chip-row">
-        <button type="button" id="set-home">Définir domicile</button>
-        <button type="button" id="set-depot">Définir dépôt</button>
-        <button type="button" id="go-home">Aller domicile</button>
-        <button type="button" id="go-depot">Aller dépôt</button>
+        <button type="button" id="set-home" data-i18n="set.home">Définir domicile</button>
+        <button type="button" id="set-depot" data-i18n="set.depot">Définir dépôt</button>
+        <button type="button" id="go-home" data-i18n="go.home">Aller domicile</button>
+        <button type="button" id="go-depot" data-i18n="go.depot">Aller dépôt</button>
       </div>
       <div id="favorites-list"></div>
 
-      <div class="panel-title">Alertes (police / dangers)</div>
+      <div class="panel-title" data-i18n="panel.alerts">Alertes (police / dangers)</div>
       <div class="chip-row">
-        <button type="button" data-hazard="police">Police</button>
-        <button type="button" data-hazard="danger">Danger</button>
-        <button type="button" data-hazard="accident">Accident</button>
-        <button type="button" data-hazard="fermeture">Fermeture</button>
+        <button type="button" data-hazard="police" data-i18n="hazard.police">Police</button>
+        <button type="button" data-hazard="danger" data-i18n="hazard.danger">Danger</button>
+        <button type="button" data-hazard="accident" data-i18n="hazard.accident">Accident</button>
+        <button type="button" data-hazard="fermeture" data-i18n="hazard.closure">Fermeture</button>
       </div>
-      <div class="truck-note">Pose une alerte à ta position (ou au centre de la carte). Stockage local sur cet appareil.</div>
+      <div class="truck-note" data-i18n="alerts.note">Pose une alerte à ta position (ou au centre de la carte). Stockage local sur cet appareil.</div>
       <div id="hazards-list"></div>
 
-      <div class="panel-title">Mode hors-ligne</div>
-      <div class="truck-note" id="offline-note">Le service worker met en cache l'app pour un usage partiel hors-ligne (carte et routage online restent nécessaires).</div>
-      <button type="button" id="offline-enable" class="stop">Activer le cache hors-ligne</button>
+      <div class="panel-title" data-i18n="panel.offline">Mode hors-ligne</div>
+      <div class="truck-note" id="offline-note" data-i18n="offline.note">Le service worker met en cache l'app pour un usage partiel hors-ligne (carte et routage online restent nécessaires).</div>
+      <button type="button" id="offline-enable" class="stop" data-i18n="offline.enable">Activer le cache hors-ligne</button>
 
-      <div class="panel-title">Notifications ponts bas</div>
+      <div class="panel-title" data-i18n="panel.bridgesNotify">Notifications ponts bas</div>
       <div class="check-list">
-        <label><input type="checkbox" id="opt-bridge-notify" checked> Alerter à l'approche d'un pont bas</label>
+        <label><input type="checkbox" id="opt-bridge-notify" checked> <span data-i18n="opt.bridgeNotify">Alerter à l'approche d'un pont bas</span></label>
       </div>
 
-      <div class="panel-title">Cartes officielles no-truck</div>
-      <div id="truck-sources-list" class="truck-note">Chargement des sources…</div>
+      <div class="panel-title" data-i18n="panel.officialMaps">Cartes officielles no-truck</div>
+      <div id="truck-sources-list" class="truck-note" data-i18n="sources.loading">Chargement des sources…</div>
+    </div>
+
+    <div class="tab-panel" data-panel="langue">
+      <div class="panel-title" data-i18n="lang.title">Langue</div>
+      <div class="truck-note" data-i18n="lang.intro">Choisis la langue de l'application. Langues du Canada, des États-Unis et du Mexique.</div>
+      <div id="lang-list"></div>
     </div>
 
   </div>
@@ -1017,31 +1075,41 @@
   <nav class="tab-bar">
     <button type="button" class="tab-btn active" data-tab="accueil">
       <svg viewBox="0 0 24 24"><path d="M3 9.5L12 3l9 6.5V20a1 1 0 01-1 1h-5v-6H9v6H4a1 1 0 01-1-1V9.5z"/></svg>
-      Accueil
+      <span data-i18n="tab.home">Accueil</span>
     </button>
     <button type="button" class="tab-btn" data-tab="go">
       <svg viewBox="0 0 24 24"><circle cx="12" cy="10" r="3"/><path d="M12 21s7-4.35 7-10a7 7 0 10-14 0c0 5.65 7 10 7 10z"/></svg>
-      Go
+      <span data-i18n="tab.go">Go</span>
     </button>
     <button type="button" class="tab-btn" data-tab="zones">
       <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
-      Zones
+      <span data-i18n="tab.zones">Zones</span>
     </button>
     <button type="button" class="tab-btn" data-tab="trajet">
       <svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-      Trajet
+      <span data-i18n="tab.trip">Trajet</span>
     </button>
     <button type="button" class="tab-btn" data-tab="pro">
       <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></svg>
-      Pro
+      <span data-i18n="tab.pro">Pro</span>
+    </button>
+    <button type="button" class="tab-btn" data-tab="langue">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 010 18M12 3a14 14 0 000 18"/></svg>
+      <span data-i18n="tab.lang">Langue</span>
     </button>
   </nav>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
-<script src="./nav-pro.js?v=16"></script>
-<script src="./truck-network.js?v=16"></script>
+<script src="./i18n.js?v=19"></script>
+<script src="./nav-pro.js?v=19"></script>
+<script src="./truck-network.js?v=19"></script>
 <script>
+  function t(key, vars){
+    return (window.I18n && I18n.t) ? I18n.t(key, vars) : key;
+  }
+  if (window.I18n) I18n.apply(document);
+
   // Profil véhicule (Navigation Pro) — comptes reportés à plus tard
   let TRUCK = Object.assign({ hazmat: false }, NavPro.getActiveVehicleProfile());
 
@@ -1113,7 +1181,7 @@
   // Navigation vocale
   const VOICE_THRESHOLDS = { far: 500, near: 100, now: 35 };
   let voiceEnabled = true;
-  let frenchVoice = null;
+  let appVoice = null;
   let guidanceSteps = [];
   let guidanceIndex = 0;
   let speechUnlocked = false;
@@ -1303,16 +1371,20 @@
     };
   }
 
-  function pickFrenchVoice(){
+  function pickAppVoice(){
     if (!window.speechSynthesis) return null;
     const voices = speechSynthesis.getVoices();
-    return voices.find(v => /^fr(-|_)/i.test(v.lang) && /CA|FR|BE|CH/i.test(v.lang)) ||
-      voices.find(v => /^fr/i.test(v.lang)) ||
+    const loc = (window.I18n && I18n.speechLang()) || 'fr-CA';
+    const lang = loc.slice(0, 2);
+    const locRe = new RegExp('^' + loc.replace('-', '(-|_)'), 'i');
+    const langRe = new RegExp('^' + lang, 'i');
+    return voices.find(v => locRe.test(v.lang)) ||
+      voices.find(v => langRe.test(v.lang)) ||
       null;
   }
 
   function refreshVoices(){
-    frenchVoice = pickFrenchVoice();
+    appVoice = pickAppVoice();
   }
 
   if (window.speechSynthesis) {
@@ -1337,8 +1409,8 @@
     unlockSpeech();
     if (interrupt) speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(text);
-    u.lang = (frenchVoice && frenchVoice.lang) || 'fr-CA';
-    if (frenchVoice) u.voice = frenchVoice;
+    u.lang = (appVoice && appVoice.lang) || ((window.I18n && I18n.speechLang()) || 'fr-CA');
+    if (appVoice) u.voice = appVoice;
     u.rate = 1.02;
     u.pitch = 1;
     u.volume = 1;
@@ -1349,18 +1421,18 @@
     if (step.succinct) return step.succinct.replace(/\.$/, '');
     if (step.verbal) return step.verbal.replace(/\.$/, '');
     if (step.instruction) return step.instruction.replace(/\.$/, '');
-    return 'Continuez tout droit';
+    return t('guidance.straight');
   }
 
   function announceDistance(meters, step){
     const phrase = maneuverPhrase(step);
     if (meters >= VOICE_THRESHOLDS.far) {
-      return 'Dans cinq cents mètres. ' + phrase;
+      return t('voice.in500', { phrase: phrase });
     }
     if (meters >= VOICE_THRESHOLDS.near) {
-      return 'Dans cent mètres. ' + phrase;
+      return t('voice.in100', { phrase: phrase });
     }
-    return 'Maintenant. ' + phrase;
+    return t('voice.now', { phrase: phrase });
   }
 
   function isArrivalManeuver(type){
@@ -1399,7 +1471,7 @@
     if (window.speechSynthesis) speechSynthesis.cancel();
     guidanceBanner.classList.remove('active');
     guidanceDistEl.textContent = '—';
-    guidanceInstrEl.textContent = 'En attente d\'itinéraire';
+    guidanceInstrEl.textContent = t('guidance.wait');
     guidanceStreetEl.textContent = '';
     if (guidanceShieldsEl) guidanceShieldsEl.innerHTML = '';
   }
@@ -1424,9 +1496,9 @@
     if (guidanceIndex < guidanceSteps.length) {
       const step = guidanceSteps[guidanceIndex];
       paintGuidanceStep(step, '—');
-      speak('Itinéraire camion prêt. Prochaine instruction : ' + maneuverPhrase(step) + '.');
+      speak(t('voice.routeReady', { phrase: maneuverPhrase(step) }));
     } else {
-      guidanceInstrEl.textContent = 'Itinéraire prêt';
+      guidanceInstrEl.textContent = t('guidance.ready');
       if (guidanceShieldsEl) guidanceShieldsEl.innerHTML = '';
     }
   }
@@ -1459,9 +1531,9 @@
     if (!step.announced.now && dist <= VOICE_THRESHOLDS.now) {
       step.announced.now = true;
       if (isArrivalManeuver(step.type)) {
-        speak('Vous êtes arrivé à destination.');
+        speak(t('voice.arrived'));
         guidanceDistEl.textContent = '0 m';
-        guidanceInstrEl.textContent = 'Arrivée';
+        guidanceInstrEl.textContent = t('guidance.arrive');
         guidanceIndex = guidanceSteps.length;
         if (lastTripMeta) {
           try {
@@ -1479,7 +1551,7 @@
     if (step.announced.now && dist > VOICE_THRESHOLDS.now + 40) {
       guidanceIndex++;
       if (guidanceIndex >= guidanceSteps.length) {
-        guidanceInstrEl.textContent = 'Arrivée';
+        guidanceInstrEl.textContent = t('guidance.arrive');
         guidanceDistEl.textContent = '0 m';
         return;
       }
@@ -1490,16 +1562,16 @@
   voiceToggleBtn.addEventListener('click', () => {
     unlockSpeech();
     voiceEnabled = !voiceEnabled;
-    voiceToggleBtn.textContent = voiceEnabled ? 'Voix : activée' : 'Voix : coupée';
+    voiceToggleBtn.textContent = voiceEnabled ? t('voice.on') : t('voice.off');
     if (!voiceEnabled && window.speechSynthesis) speechSynthesis.cancel();
-    else if (voiceEnabled) speak('Navigation vocale activée.');
+    else if (voiceEnabled) speak(t('voice.navOn'));
   });
 
   voiceTestBtn.addEventListener('click', () => {
     unlockSpeech();
     voiceEnabled = true;
-    voiceToggleBtn.textContent = 'Voix : activée';
-    speak('Dans cinq cents mètres. Tournez à droite. Dans cent mètres. Tournez à droite. Maintenant. Tournez à droite.');
+    voiceToggleBtn.textContent = t('voice.on');
+    speak(t('voice.testPhrase'));
   });
 
   // Décodage polyline Valhalla (précision 1e6)
@@ -1555,8 +1627,15 @@
   }
 
   async function fetchSuggestions(query){
-    const url = NOMINATIM + '/search?format=json&limit=5&addressdetails=0&countrycodes=ca,us,mx&q=' + encodeURIComponent(query);
-    const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+    const url = NOMINATIM + '/search?format=json&limit=5&addressdetails=0&countrycodes=ca,us,mx&accept-language=' +
+      encodeURIComponent((window.I18n && I18n.nominatimLang()) || 'fr') +
+      '&q=' + encodeURIComponent(query);
+    const res = await fetch(url, {
+      headers: {
+        'Accept': 'application/json',
+        'Accept-Language': (window.I18n && I18n.nominatimLang()) || 'fr'
+      }
+    });
     if (!res.ok) return [];
     return res.json();
   }
@@ -1653,11 +1732,18 @@
   }
 
   async function geocode(query){
-    const url = NOMINATIM + '/search?format=json&limit=1&countrycodes=ca,us,mx&q=' + encodeURIComponent(query);
-    const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
-    if (!res.ok) throw new Error('recherche indisponible');
+    const url = NOMINATIM + '/search?format=json&limit=1&countrycodes=ca,us,mx&accept-language=' +
+      encodeURIComponent((window.I18n && I18n.nominatimLang()) || 'fr') +
+      '&q=' + encodeURIComponent(query);
+    const res = await fetch(url, {
+      headers: {
+        'Accept': 'application/json',
+        'Accept-Language': (window.I18n && I18n.nominatimLang()) || 'fr'
+      }
+    });
+    if (!res.ok) throw new Error(t('err.searchDown'));
     const results = await res.json();
-    if (!results.length) throw new Error('adresse introuvable');
+    if (!results.length) throw new Error(t('err.addrMissing'));
     return [parseFloat(results[0].lat), parseFloat(results[0].lon)];
   }
 
@@ -1816,7 +1902,7 @@
       locations: locations,
       costing: costing,
       costing_options: costingOptions,
-      directions_options: { units: 'kilometers', language: 'fr-FR' }
+      directions_options: { units: 'kilometers', language: (window.I18n && I18n.valhallaLang()) || 'fr-FR' }
     };
     if (excludePolygons && excludePolygons.length) {
       body.exclude_polygons = excludePolygons;
@@ -1831,7 +1917,7 @@
     });
     const data = await res.json();
     if (!res.ok || data.error || !data.trip) {
-      throw new Error((data && (data.error || data.error_message)) || 'itinéraire impossible');
+      throw new Error((data && (data.error || data.error_message)) || t('route.impossible'));
     }
     return data.trip;
   }
@@ -1862,12 +1948,12 @@
     const borderExcludes = (countryOnly && typeof TruckNetwork.borderExcludeLocationsForDomestic === 'function')
       ? TruckNetwork.borderExcludeLocationsForDomestic(countryOnly)
       : null;
-    routeNote.textContent = 'Long trajet : calcul en ' + (points.length - 1) + ' segments…';
+    routeNote.textContent = t('route.longSplit', { n: points.length - 1 });
     const trips = [];
     for (let i = 0; i < points.length - 1; i++) {
       const a = points[i];
       const b = points[i + 1];
-      routeNote.textContent = 'Segment ' + (i + 1) + '/' + (points.length - 1) + '…';
+      routeNote.textContent = t('route.segment', { i: i + 1, n: points.length - 1 });
       const locs = [
         { lat: a[0], lon: a[1], type: 'break' },
         { lat: b[0], lon: b[1], type: 'break' }
@@ -1946,7 +2032,7 @@
     const enabled = document.getElementById('net-official');
     if (enabled && !enabled.checked) {
       const note = document.getElementById('net-note');
-      if (note) note.textContent = 'Affichage du réseau officiel désactivé.';
+      if (note) note.textContent = t('net.off');
       return;
     }
     if (!net || !net.all || !net.all.length) return;
@@ -1994,12 +2080,12 @@
     });
     const note = document.getElementById('net-note');
     if (note) {
-      note.textContent = (net.sourcesUsed.join(' + ') || 'aucune source') +
-        (redOnly ? ' · rouges prioritaires' : '') +
-        ' · ' + net.forbidden.length + ' no-truck' +
-        (industrial.length ? ' · ' + industrial.length + ' industriel' : '') +
-        (net.caution.length ? ' · ' + net.caution.length + ' restreint' : '') +
-        (otherAllowed.length ? ' · ' + otherAllowed.length + ' transit' : '');
+      note.textContent = (net.sourcesUsed.join(' + ') || t('net.none')) +
+        (redOnly ? t('net.redFirst') : '') +
+        t('net.noTruck', { n: net.forbidden.length }) +
+        (industrial.length ? t('net.ind', { n: industrial.length }) : '') +
+        (net.caution.length ? t('net.caution', { n: net.caution.length }) : '') +
+        (otherAllowed.length ? t('net.transit', { n: otherAllowed.length }) : '');
     }
   }
 
@@ -2049,15 +2135,15 @@
   async function calculateTruckRoute(){
     const origin = currentOrigin();
     if (!origin || !destLatLng) {
-      routeNote.textContent = 'Définis un point de départ et une destination.';
+      routeNote.textContent = t('route.needEnds');
       return;
     }
     if (routeLoading) return;
     unlockSpeech();
     routeLoading = true;
     routeCalcBtn.disabled = true;
-    routeCalcBtn.textContent = 'Calcul camion…';
-    routeNote.textContent = 'Chargement du réseau camion officiel (CA/US) + calcul PL…';
+    routeCalcBtn.textContent = t('route.calc');
+    routeNote.textContent = t('route.loadingNet');
 
     // Profils camion : « fast » = plus rapide (autorise routes nationales CA) ;
     // « strict » = plus PL / truck routes (peut détourner via USA — on le pénalise côté score).
@@ -2092,7 +2178,7 @@
 
     try {
       if (!window.TruckNetwork) {
-        throw new Error('module réseau camion non chargé — recharge la page (Ctrl+F5)');
+        throw new Error(t('err.moduleNet'));
       }
       const routeOpts = NavPro.getRouteOptions();
       const originCountry = typeof TruckNetwork.guessCountry === 'function'
@@ -2231,7 +2317,7 @@
 
         // —— Trajet international (CA→US, CA→MX, etc.) : autoriser la frontière ——
         if (!stayDomestic) {
-          routeNote.textContent = 'Calcul itinéraire international (' + originCountry + ' → ' + destCountry + ')…';
+          routeNote.textContent = t('route.intl', { from: originCountry, to: destCountry });
           const odKm = haversine(origin[0], origin[1], destLatLng[0], destLatLng[1]) / 1000;
           const needsSegments = odKm > 1300;
 
@@ -2299,7 +2385,7 @@
           );
           if (autoIntl) return autoIntl;
 
-          throw new Error('Aucun itinéraire ' + originCountry + ' → ' + destCountry + ' trouvé');
+          throw new Error(t('err.noIntl', { from: originCountry, to: destCountry }));
         }
 
         // —— Même pays : jamais de frontière ——
@@ -2328,7 +2414,7 @@
 
         // A0) Très long trajet domestique (>~1300 km) : Valhalla public max ~1500 km
         if (needsDomesticSegments) {
-          routeNote.textContent = 'Long trajet ' + originCountry + ' : découpage sans frontière…';
+          routeNote.textContent = t('route.longDomestic', { cc: originCountry });
           const truckSeg = await tryDomesticSegmented(
             'truck',
             truckHwyOpts,
@@ -2345,7 +2431,7 @@
 
         // A) Long trajet : forcer d'abord un corridor domestique
         if (longHaul && domesticVias.length) {
-          routeNote.textContent = 'Calcul sans frontière (corridor ' + originCountry + ')…';
+          routeNote.textContent = t('route.noBorder', { cc: originCountry });
           const autoFirst = await tryAutoDomestic(excludes, [domesticVias[0]], originCountry + ' · via corridor · plus rapide');
           if (autoFirst) return autoFirst;
           try {
@@ -2362,7 +2448,7 @@
 
         // C) Vias domestiques camion puis auto
         if (domesticVias.length) {
-          routeNote.textContent = 'Recalcul sans frontière (points de passage au pays)…';
+          routeNote.textContent = t('route.recalcNoBorder');
           for (let i = 0; i < domesticVias.length; i++) {
             const viaSet = domesticVias.slice(0, i + 1);
             try {
@@ -2376,7 +2462,7 @@
         }
 
         // D) Auto direct sans frontière
-        routeNote.textContent = 'Secours réseau routier sans frontière…';
+        routeNote.textContent = t('route.fallbackNoBorder');
         const autoDirect = await tryAutoDomestic(excludes, null, 'réseau routier · sans frontière');
         if (autoDirect) return autoDirect;
 
@@ -2390,7 +2476,7 @@
         );
         if (autoSegLate) return autoSegLate;
 
-        throw new Error(originCountry + ' → ' + destCountry + ' : aucun itinéraire sans frontière trouvé');
+        throw new Error(t('err.noDomestic', { from: originCountry, to: destCountry }));
       }
 
       // Forcer la case UI si même pays
@@ -2404,10 +2490,10 @@
 
       // 1) Calcul d'itinéraire immédiatement (ne pas attendre le WFS)
       routeNote.textContent = sameCountry
-        ? ('Calcul ' + originCountry + ' → ' + destCountry + ' sans frontière…')
+        ? t('route.sameCountry', { from: originCountry, to: destCountry })
         : internationalTrip
-          ? ('Calcul international ' + originCountry + ' → ' + destCountry + '…')
-          : 'Calcul du chemin le plus rapide…';
+          ? t('route.intlShort', { from: originCountry, to: destCountry })
+          : t('route.fastest');
       const netPromise = loadOfficialTruckNetworkForRoute().catch((e) => {
         return { forbidden: [], allowed: [], caution: [], all: [], sourcesUsed: [], _error: e.message || String(e) };
       });
@@ -2427,7 +2513,7 @@
 
       // 3) Filet anti-frontière absolu
       if (stayDomestic && best && crossesForeign(best.trip)) {
-        routeNote.textContent = 'Frontière détectée — recalcul obligatoire au pays…';
+        routeNote.textContent = t('route.borderHit');
         ensured = await ensureDomesticRoute(null);
         best = ensured.best;
         ranked = ensured.ranked;
@@ -2472,7 +2558,7 @@
                 })
               : [];
             if (!followed.length) break;
-            routeNote.textContent = 'Évitement no-truck (passe ' + (round + 1) + ')…';
+            routeNote.textContent = t('route.avoidPass', { n: round + 1 });
             const before = polys.length;
             polys = TruckNetwork.buildExcludePolygons(targetForbidden, longHaul ? 20 : 50, draftCoords, false, {
               densify: true,
@@ -2497,9 +2583,9 @@
       }
 
       let trip = best && best.trip;
-      if (!trip) throw new Error('aucun itinéraire disponible');
+      if (!trip) throw new Error(t('err.noRoute'));
       if (stayDomestic && crossesForeign(trip)) {
-        throw new Error('itinéraire frontalier refusé (sans passeport / même pays)');
+        throw new Error(t('err.borderRefused'));
       }
 
       let modeNote = crossesForeign(trip)
@@ -2513,7 +2599,7 @@
       if (netInfo) modeNote += ' · ' + netInfo;
 
       const allCoords = tripCoords(trip);
-      if (allCoords.length < 2) throw new Error('tracé vide');
+      if (allCoords.length < 2) throw new Error(t('err.emptyTrace'));
 
       if (routeLine) map.removeLayer(routeLine);
       routeLine = L.polyline(allCoords, {
@@ -2550,9 +2636,11 @@
         renderFavorites();
       } catch (e) { /* ignore */ }
       announcedBridgeIds = new Set();
-      routeNote.textContent = 'Itinéraire camion : ' + summary.length.toFixed(1) + ' km · ' +
-        fmtDuration(summary.time) + ' · ' + modeNote +
-        ' · guidage vocal à 500 m, 100 m et au virage.';
+      routeNote.textContent = t('route.done', {
+        km: summary.length.toFixed(1),
+        dur: fmtDuration(summary.time),
+        mode: modeNote
+      });
       if (!navMode) map.fitBounds(routeLine.getBounds(), { padding: [40, 40] });
       startGuidance(trip);
       if (lastLatLng) updateGuidance(lastLatLng[0], lastLatLng[1]);
@@ -2560,11 +2648,11 @@
       setTimeout(() => { scanRouteForLowBridges(); }, 1500);
     } catch (err) {
       clearRoute();
-      routeNote.textContent = 'Impossible de calculer l\'itinéraire (' + err.message + ').';
+      routeNote.textContent = t('route.fail', { msg: err.message });
     } finally {
       routeLoading = false;
       routeCalcBtn.disabled = false;
-      routeCalcBtn.textContent = 'Recalculer l\'itinéraire camion';
+      routeCalcBtn.textContent = t('route.recalc');
     }
   }
 
@@ -2621,7 +2709,7 @@
       originError.textContent = err.message;
     } finally {
       originSearchBtn.disabled = false;
-      originSearchBtn.textContent = 'Valider';
+      originSearchBtn.textContent = t('origin.validate');
     }
   });
 
@@ -2639,7 +2727,7 @@
       destError.textContent = err.message;
     } finally {
       destSearchBtn.disabled = false;
-      destSearchBtn.textContent = 'Chercher';
+      destSearchBtn.textContent = t('dest.search');
     }
   });
 
@@ -2710,7 +2798,7 @@
 
   trackToggleBtn.addEventListener('click', () => {
     tracking = !tracking;
-    trackToggleBtn.textContent = tracking ? 'Suspendre le suivi' : 'Suivre le trajet';
+    trackToggleBtn.textContent = tracking ? t('track.pause') : t('track.follow');
     trackToggleBtn.classList.toggle('stop', tracking);
   });
 
@@ -2732,7 +2820,7 @@
     ).join('\n');
     const gpx = '<?xml version="1.0" encoding="UTF-8"?>\n' +
       '<gpx version="1.1" creator="Position GPS Camion" xmlns="http://www.topografix.com/GPX/1/1">\n' +
-      '  <trk>\n    <name>Trajet camion</name>\n    <trkseg>\n' + pts + '\n    </trkseg>\n  </trk>\n</gpx>';
+      '  <trk>\n    <name>' + t('gpx.name') + '</name>\n    <trkseg>\n' + pts + '\n    </trkseg>\n  </trk>\n</gpx>';
     const blob = new Blob([gpx], { type: 'application/gpx+xml' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -2758,7 +2846,7 @@
       method: 'POST',
       body: 'data=' + encodeURIComponent(query)
     });
-    if (!res.ok) throw new Error('service indisponible');
+    if (!res.ok) throw new Error(t('err.service'));
     return res.json();
   }
 
@@ -2774,13 +2862,13 @@
    */
   async function refreshTruckLayer(){
     if (map.getZoom() < 14) {
-      truckNote.textContent = 'Zoome au niveau rue pour les ponts bas (rouges = réseau officiel MTQ).';
+      truckNote.textContent = t('bridge.zoom');
       if (bridgeLayer) { map.removeLayer(bridgeLayer); bridgeLayer = null; }
       return;
     }
     if (truckLoading) return;
     truckLoading = true;
-    truckNote.textContent = 'Chargement des ponts bas…';
+    truckNote.textContent = t('bridge.loading');
     try {
       const data = await fetchLowBridgesOnly();
       const lowBridges = [];
@@ -2795,7 +2883,7 @@
           latlng: [lat, lon],
           height: h,
           raw: tags.maxheight,
-          name: tags.name || 'Pont / passage bas'
+          name: tags.name || t('bridge.generic')
         });
       });
 
@@ -2816,14 +2904,14 @@
         }).addTo(bridgeLayer);
         m.bindPopup(
           '<div class="bridge-popup"><strong>' + br.name + '</strong><br>' +
-          'Hauteur max : ' + br.height.toFixed(2) + ' m (' + br.raw + ')<br>' +
-          'Drybox ' + TRUCK.height.toFixed(2) + ' m → <span style="color:#FF3B3B">trop bas</span></div>'
+          t('bridge.maxH', { h: br.height.toFixed(2), raw: br.raw }) + '<br>' +
+          (TRUCK.name || 'Drybox') + ' ' + TRUCK.height.toFixed(2) + ' m → <span style="color:#FF3B3B">' + t('bridge.tooLow') + '</span></div>'
         );
       });
 
-      truckNote.textContent = lowBridges.length + ' pont(s) bas · rouges = réseau officiel (onglet Réseau).';
+      truckNote.textContent = t('bridge.count', { n: lowBridges.length });
     } catch (err) {
-      truckNote.textContent = 'Ponts bas indisponibles (' + err.message + ').';
+      truckNote.textContent = t('bridge.fail', { msg: err.message });
     } finally {
       truckLoading = false;
     }
@@ -2837,10 +2925,10 @@
   function onPosition(pos){
     const { latitude, longitude, accuracy, speed, altitude, heading } = pos.coords;
 
-    setStatus('live', 'position active');
+    setStatus('live', t('status.live'));
 
-    latEl.textContent = 'LAT  ' + fmtCoord(latitude, 'N', 'S');
-    lonEl.textContent = 'LON  ' + fmtCoord(longitude, 'E', 'O');
+    latEl.textContent = 'LAT  ' + fmtCoord(latitude, t('compass.n'), t('compass.s'));
+    lonEl.textContent = 'LON  ' + fmtCoord(longitude, t('lon.east'), t('lon.west'));
 
     speedEl.innerHTML = (speed != null ? Math.round(speed * 3.6) : '—') + '<span class="unit">km/h</span>';
     altEl.innerHTML = (altitude != null ? Math.round(altitude) : '—') + '<span class="unit">m</span>';
@@ -2902,23 +2990,23 @@
   }
 
   function onError(err){
-    setStatus('error', err.message || 'erreur de localisation');
+    setStatus('error', err.message || t('status.geoError'));
     stopWatch();
   }
 
   function startWatch(){
     if (!navigator.geolocation) {
-      setStatus('error', 'géolocalisation indisponible');
+      setStatus('error', t('status.geoUnavailable'));
       return;
     }
     unlockSpeech();
-    setStatus('', 'recherche du signal…');
+    setStatus('', t('status.searching'));
     watchId = navigator.geolocation.watchPosition(onPosition, onError, {
       enableHighAccuracy: true,
       maximumAge: 1000,
       timeout: 15000
     });
-    toggleBtn.textContent = 'Arrêter';
+    toggleBtn.textContent = t('toggle.stop');
     toggleBtn.classList.add('stop');
   }
 
@@ -2927,9 +3015,9 @@
       navigator.geolocation.clearWatch(watchId);
       watchId = null;
     }
-    toggleBtn.textContent = 'Activer la localisation';
+    toggleBtn.textContent = t('toggle.start');
     toggleBtn.classList.remove('stop');
-    setStatus('', 'en attente');
+    setStatus('', t('status.waiting'));
   }
 
   toggleBtn.addEventListener('click', () => {
@@ -2958,8 +3046,9 @@
     if (vehicleProfileSelect) vehicleProfileSelect.value = TRUCK.id || 'drybox';
     if (customVehicle) customVehicle.style.display = TRUCK.id === 'custom' ? 'block' : 'none';
     if (vehicleSummary) {
+      const vName = t('vehicle.name.' + (TRUCK.id || 'drybox'));
       vehicleSummary.textContent =
-        (TRUCK.name || TRUCK.id) + ' · H ' + TRUCK.height.toFixed(2) + ' m · L ' +
+        vName + ' · H ' + TRUCK.height.toFixed(2) + ' m · L ' +
         TRUCK.width.toFixed(2) + ' m · Long ' + TRUCK.length.toFixed(1) + ' m · ' +
         TRUCK.weight.toFixed(1) + ' t';
     }
@@ -2998,8 +3087,8 @@
     const factor = NavPro.estimateTrafficFactor(new Date());
     const withTraffic = NavPro.applyTrafficEta(baseSeconds, factor);
     const delayMin = Math.max(0, Math.round((withTraffic - baseSeconds) / 60));
-    etaTrafficEl.textContent = 'ETA trafic estimé : ' + fmtDuration(withTraffic) +
-      (delayMin ? ' (+' + delayMin + ' min vs fluide, ×' + factor.toFixed(2) + ')' : ' (fluide)');
+    etaTrafficEl.textContent = t('eta.traffic', { dur: fmtDuration(withTraffic) }) +
+      (delayMin ? t('eta.delay', { min: delayMin, f: factor.toFixed(2) }) : t('eta.fluid'));
     if (hudEta) hudEta.textContent = fmtDuration(withTraffic);
   }
 
@@ -3011,7 +3100,7 @@
     setTimeout(() => { try { map.invalidateSize(); } catch (e) {} }, 80);
     if (navMode && lastLatLng) {
       map.setView(lastLatLng, Math.max(map.getZoom(), 16));
-      speak('Mode navigation activé.');
+      speak(t('voice.navMode'));
       NavPro.ensureNotificationPermission();
     }
   }
@@ -3021,25 +3110,25 @@
   async function shareCurrent(etaOnly){
     const parts = [];
     if (lastLatLng) {
-      parts.push('Position : ' + lastLatLng[0].toFixed(5) + ', ' + lastLatLng[1].toFixed(5));
+      parts.push(t('share.pos', { lat: lastLatLng[0].toFixed(5), lon: lastLatLng[1].toFixed(5) }));
       parts.push('https://maps.google.com/?q=' + lastLatLng[0] + ',' + lastLatLng[1]);
     }
     if (destLatLng) {
-      parts.push('Destination : ' + destLatLng[0].toFixed(5) + ', ' + destLatLng[1].toFixed(5));
+      parts.push(t('share.dest', { lat: destLatLng[0].toFixed(5), lon: destLatLng[1].toFixed(5) }));
     }
     if (baseRouteSeconds) {
       const o = NavPro.getRouteOptions();
       const sec = o.useTraffic
         ? NavPro.applyTrafficEta(baseRouteSeconds, NavPro.estimateTrafficFactor(new Date()))
         : baseRouteSeconds;
-      parts.push('ETA estimée : ' + fmtDuration(sec));
+      parts.push(t('share.etaLine', { dur: fmtDuration(sec) }));
     }
-    const text = parts.join('\n') || 'Position GPS Camion';
-    const title = etaOnly ? 'ETA camion' : 'Position GPS Camion';
+    const text = parts.join('\n') || t('share.title');
+    const title = etaOnly ? t('share.etaTitle') : t('share.title');
     const ok = await NavPro.shareText(title, text);
     if (!ok) {
       await NavPro.copyText(text);
-      alert('Texte copié dans le presse-papiers.');
+      alert(t('share.copied'));
     }
   }
   fabShare.addEventListener('click', () => shareCurrent(false));
@@ -3050,11 +3139,11 @@
     NavPro.addFavorite({
       lat: destLatLng[0],
       lon: destLatLng[1],
-      name: (destInput.value || 'Favori').slice(0, 80),
+      name: (destInput.value || t('fav.kind.favorite')).slice(0, 80),
       kind: 'favorite'
     });
     renderFavorites();
-    speak('Destination enregistrée en favori.');
+    speak(t('voice.favSaved'));
   });
 
   // Waypoints
@@ -3066,7 +3155,7 @@
       row.className = 'waypoint-item';
       const input = document.createElement('input');
       input.type = 'text';
-      input.placeholder = 'Étape ' + (idx + 1);
+      input.placeholder = t('waypoint.step', { n: idx + 1 });
       input.value = wp.name || '';
       input.autocomplete = 'off';
       const wrap = document.createElement('div');
@@ -3139,7 +3228,7 @@
   document.getElementById('veh-save').addEventListener('click', () => {
     NavPro.setActiveVehicleProfile({
       id: 'custom',
-      name: 'Personnalisé',
+      name: t('vehicle.name.custom'),
       height: parseFloat(document.getElementById('veh-height').value),
       width: parseFloat(document.getElementById('veh-width').value),
       length: parseFloat(document.getElementById('veh-length').value),
@@ -3162,8 +3251,8 @@
       if (offRouteStreak >= 3) {
         offRouteStreak = 0;
         rerouteCooldownUntil = Date.now() + 20000;
-        speak('Hors itinéraire. Recalcul.');
-        routeNote.textContent = 'Hors itinéraire (' + Math.round(dist) + ' m) — recalcul…';
+        speak(t('voice.offRoute'));
+        routeNote.textContent = t('route.offRoute', { m: Math.round(dist) });
         calculateTruckRoute();
       }
     } else {
@@ -3194,7 +3283,7 @@
       const tags = best.tags;
       const maxspeed = tags.maxspeed || tags['maxspeed:hgv'] || null;
       const lanes = tags.lanes || tags['lanes:forward'] || null;
-      const name = tags.name || tags.ref || 'Route';
+      const name = tags.name || tags.ref || t('road.generic');
       if (maxspeed) {
         const n = parseInt(String(maxspeed).replace(/[^0-9]/g, ''), 10);
         speedLimitBadge.textContent = isFinite(n) ? String(n) : '—';
@@ -3202,9 +3291,9 @@
         if (hudLimit) hudLimit.textContent = isFinite(n) ? n : '—';
       }
       const bits = [name];
-      if (lanes) bits.push(lanes + ' voie(s)');
-      if (tags.maxspeed) bits.push('limite ' + tags.maxspeed);
-      if (tags['maxspeed:hgv']) bits.push('PL ' + tags['maxspeed:hgv']);
+      if (lanes) bits.push(t('road.lanes', { n: lanes }));
+      if (tags.maxspeed) bits.push(t('road.limit', { v: tags.maxspeed }));
+      if (tags['maxspeed:hgv']) bits.push(t('road.hgv', { v: tags['maxspeed:hgv'] }));
       laneInfoEl.textContent = bits.join(' · ');
       laneInfoEl.classList.add('has-content');
     } catch (e) { /* ignore */ }
@@ -3239,7 +3328,7 @@
         routeLowBridges.push({
           id: el.type + '/' + el.id,
           lat, lon, height: h,
-          name: tags.name || 'Pont bas'
+          name: tags.name || t('bridge.low')
         });
       });
     } catch (e) { /* ignore */ }
@@ -3252,10 +3341,9 @@
       const d = haversine(lat, lon, br.lat, br.lon);
       if (d < 400) {
         announcedBridgeIds.add(br.id);
-        const msg = 'Attention. Pont bas à ' + Math.round(d) + ' mètres. Hauteur ' +
-          br.height.toFixed(2) + ' mètres.';
+        const msg = t('voice.lowBridge', { m: Math.round(d), h: br.height.toFixed(2) });
         speak(msg);
-        NavPro.notify('Pont bas', br.name + ' · ' + br.height.toFixed(2) + ' m');
+        NavPro.notify(t('notify.lowBridge'), br.name + ' · ' + br.height.toFixed(2) + ' m');
       }
     });
   }
@@ -3265,9 +3353,9 @@
     near.forEach((h) => {
       if (announcedHazardIds.has(h.id)) return;
       announcedHazardIds.add(h.id);
-      const label = ({ police:'Police', danger:'Danger', accident:'Accident', fermeture:'Fermeture' })[h.type] || 'Alerte';
-      speak('Alerte ' + label + ' à proximité.');
-      NavPro.notify(label, h.note || 'Alerte signalée sur le parcours');
+      const label = hazardLabel(h.type);
+      speak(t('voice.hazardNear', { label: label }));
+      NavPro.notify(label, h.note || t('hazard.nearby'));
     });
   }
 
@@ -3277,14 +3365,14 @@
     const enabled = ['fuel','parking','rest','weigh'].filter((k) => document.getElementById('poi-' + k).checked);
     if (poiLayer) { map.removeLayer(poiLayer); poiLayer = null; }
     if (!enabled.length) {
-      document.getElementById('poi-note').textContent = 'Aucune catégorie POI active.';
+      document.getElementById('poi-note').textContent = t('poi.note');
       return;
     }
     if (map.getZoom() < 11) {
-      document.getElementById('poi-note').textContent = 'Zoome davantage pour charger les POI camion.';
+      document.getElementById('poi-note').textContent = t('poi.zoom');
       return;
     }
-    document.getElementById('poi-note').textContent = 'Chargement des POI…';
+    document.getElementById('poi-note').textContent = t('poi.loading');
     const b = map.getBounds();
     const bbox = {
       south: b.getSouth(), west: b.getWest(), north: b.getNorth(), east: b.getEast()
@@ -3292,7 +3380,7 @@
     const query = NavPro.buildPoiOverpassQuery(bbox);
     try {
       const res = await fetch(OVERPASS_URL, { method: 'POST', body: 'data=' + encodeURIComponent(query) });
-      if (!res.ok) throw new Error('service indisponible');
+      if (!res.ok) throw new Error(t('err.service'));
       const data = await res.json();
       const parsed = NavPro.parsePoiOverpassResponse(data);
       poiLayer = L.layerGroup().addTo(map);
@@ -3307,9 +3395,9 @@
           m.bindPopup('<strong>' + (p.name || cat) + '</strong><br>' + cat);
         });
       });
-      document.getElementById('poi-note').textContent = count + ' point(s) d\'intérêt affiché(s).';
+      document.getElementById('poi-note').textContent = t('poi.count', { n: count });
     } catch (err) {
-      document.getElementById('poi-note').textContent = 'POI indisponibles (' + err.message + ').';
+      document.getElementById('poi-note').textContent = t('poi.fail', { msg: err.message });
     }
   }
   const debouncedPoi = debounce(refreshPoiLayer, 1400);
@@ -3320,7 +3408,8 @@
 
   // Hazards UI
   function hazardLabel(type){
-    return ({ police:'Police', danger:'Danger', accident:'Accident', fermeture:'Fermeture' })[type] || type;
+    const keys = { police:'hazard.police', danger:'hazard.danger', accident:'hazard.accident', fermeture:'hazard.closure' };
+    return keys[type] ? t(keys[type]) : type;
   }
   function renderHazards(){
     const list = document.getElementById('hazards-list');
@@ -3336,7 +3425,7 @@
       actions.className = 'actions';
       const del = document.createElement('button');
       del.className = 'stop';
-      del.textContent = 'Suppr.';
+      del.textContent = t('hazard.delete');
       del.addEventListener('click', () => { NavPro.removeHazard(h.id); renderHazards(); });
       actions.appendChild(del);
       card.appendChild(actions);
@@ -3350,10 +3439,10 @@
   document.querySelectorAll('[data-hazard]').forEach((btn) => {
     btn.addEventListener('click', () => {
       const pos = lastLatLng || [map.getCenter().lat, map.getCenter().lng];
-      const note = prompt('Note pour l\'alerte (optionnel)') || '';
+      const note = prompt(t('hazard.prompt')) || '';
       NavPro.addHazard({ type: btn.dataset.hazard, lat: pos[0], lon: pos[1], note });
       renderHazards();
-      speak('Alerte ' + hazardLabel(btn.dataset.hazard) + ' signalée.');
+      speak(t('voice.hazardSet', { label: hazardLabel(btn.dataset.hazard) }));
     });
   });
 
@@ -3363,13 +3452,13 @@
     list.innerHTML = '';
     const items = NavPro.listFavorites().slice().reverse();
     if (!items.length) {
-      list.innerHTML = '<div class="truck-note">Aucun favori pour l\'instant.</div>';
+      list.innerHTML = '<div class="truck-note">' + t('fav.empty') + '</div>';
       return;
     }
     items.forEach((f) => {
       const card = document.createElement('div');
       card.className = 'list-card';
-      const kind = f.kind === 'home' ? 'Domicile' : f.kind === 'depot' ? 'Dépôt' : f.kind === 'recent' ? 'Récent' : 'Favori';
+      const kind = f.kind === 'home' ? t('fav.kind.home') : f.kind === 'depot' ? t('fav.kind.depot') : f.kind === 'recent' ? t('fav.kind.recent') : t('fav.kind.favorite');
       card.innerHTML = '<div><div class="name">' + kind + ' · ' + f.name + '</div><div class="meta">' +
         f.lat.toFixed(4) + ', ' + f.lon.toFixed(4) + '</div></div>';
       const actions = document.createElement('div');
@@ -3393,13 +3482,13 @@
   }
   function setSpecialFavorite(kind){
     const pos = destLatLng || lastLatLng || [map.getCenter().lat, map.getCenter().lng];
-    const name = kind === 'home' ? 'Domicile' : 'Dépôt';
+    const name = kind === 'home' ? t('fav.kind.home') : t('fav.kind.depot');
     NavPro.addFavorite({ lat: pos[0], lon: pos[1], name, kind });
     renderFavorites();
   }
   function goSpecialFavorite(kind){
     const f = NavPro.listFavorites().find((x) => x.kind === kind);
-    if (!f) { alert('Aucun ' + (kind === 'home' ? 'domicile' : 'dépôt') + ' défini.'); return; }
+    if (!f) { alert(t('fav.noneSpecial', { kind: kind === 'home' ? t('fav.home') : t('fav.depot') })); return; }
     setDestination([f.lat, f.lon]);
     destInput.value = f.name;
     switchTab('go');
@@ -3415,22 +3504,22 @@
     list.innerHTML = '';
     const items = NavPro.listTripHistory();
     if (!items.length) {
-      list.innerHTML = '<div class="truck-note">Aucun trajet enregistré.</div>';
+      list.innerHTML = '<div class="truck-note">' + t('history.empty') + '</div>';
       return;
     }
-    items.forEach((t) => {
+    items.forEach((trip) => {
       const card = document.createElement('div');
       card.className = 'list-card';
-      const when = (t.date || '').slice(0, 16).replace('T', ' ');
+      const when = (trip.date || '').slice(0, 16).replace('T', ' ');
       card.innerHTML = '<div><div class="name">' + when + '</div><div class="meta">' +
-        (t.distanceKm || 0).toFixed(1) + ' km · ' + fmtDuration(t.durationSec || 0) + '</div></div>';
-      if (t.destination) {
+        (trip.distanceKm || 0).toFixed(1) + ' km · ' + fmtDuration(trip.durationSec || 0) + '</div></div>';
+      if (trip.destination) {
         const actions = document.createElement('div');
         actions.className = 'actions';
         const go = document.createElement('button');
-        go.textContent = 'Rejouer';
+        go.textContent = t('history.replay');
         go.addEventListener('click', () => {
-          setDestination([t.destination[0], t.destination[1]]);
+          setDestination([trip.destination[0], trip.destination[1]]);
           switchTab('go');
         });
         actions.appendChild(go);
@@ -3450,10 +3539,10 @@
     try {
       const reg = await NavPro.registerServiceWorker('./sw.js');
       note.textContent = (reg && reg.ok)
-        ? 'Cache hors-ligne activé. Recharge la page une fois pour finaliser.'
-        : 'Service worker non supporté ou échec (' + ((reg && (reg.reason || reg.error)) || 'inconnu') + ').';
+        ? t('offline.ok')
+        : t('offline.fail', { msg: (reg && (reg.reason || reg.error)) || '—' });
     } catch (e) {
-      note.textContent = 'Impossible d\'activer le cache : ' + (e.message || e);
+      note.textContent = t('offline.error', { msg: e.message || e });
     }
   });
 
@@ -3469,17 +3558,17 @@
   renderWaypoints();
   try { NavPro.registerServiceWorker('./sw.js'); } catch (e) { /* ignore */ }
 
-  // Sources officielles CA/US/MX
-  (function renderTruckSources(){
+  function renderTruckSources(){
     const box = document.getElementById('truck-sources-list');
     if (!box || !window.TruckNetwork) return;
     box.innerHTML = TruckNetwork.SOURCES.map((s) => {
       const mapLink = s.map ? '<a href="' + s.map + '" target="_blank" rel="noopener" style="color:var(--amber)">' + s.name + '</a>' : s.name;
-      const dataLink = s.data ? ' · <a href="' + s.data + '" target="_blank" rel="noopener" style="color:var(--blue)">données</a>' : '';
+      const dataLink = s.data ? ' · <a href="' + s.data + '" target="_blank" rel="noopener" style="color:var(--blue)">' + t('sources.data') + '</a>' : '';
       return '<div style="margin-bottom:8px"><strong>' + s.country + '</strong> — ' + mapLink + dataLink +
         '<br><span style="opacity:.8">' + s.note + '</span></div>';
     }).join('');
-  })();
+  }
+  renderTruckSources();
 
   ['net-official', 'net-exclude'].forEach((id) => {
     const el = document.getElementById(id);
@@ -3519,6 +3608,78 @@
   document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.addEventListener('click', () => switchTab(btn.dataset.tab));
   });
+
+  const LANG_FLAGS = { CA: '🇨🇦', US: '🇺🇸', MX: '🇲🇽' };
+
+  function renderLanguagePicker(){
+    const box = document.getElementById('lang-list');
+    if (!box || !window.I18n) return;
+    const selected = I18n.locale();
+    box.innerHTML = '';
+    I18n.COUNTRY_ORDER.forEach((cc) => {
+      const group = document.createElement('div');
+      group.className = 'lang-country';
+      const head = document.createElement('div');
+      head.className = 'lang-country-name';
+      head.innerHTML = '<span class="flag">' + (LANG_FLAGS[cc] || '') + '</span>' + t('country.' + cc);
+      group.appendChild(head);
+      I18n.LOCALES.filter((loc) => loc.country === cc).forEach((loc) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'lang-btn' + (loc.id === selected ? ' active' : '');
+        btn.innerHTML =
+          '<span><div class="lang-native">' + loc.native + '</div>' +
+          '<div class="lang-meta">' + t('country.' + loc.country) + ' · ' + loc.id + '</div></span>' +
+          (loc.id === selected ? '<span class="lang-check">● ' + t('lang.current') + '</span>' : '');
+        btn.addEventListener('click', () => {
+          I18n.setLocale(loc.id);
+        });
+        group.appendChild(btn);
+      });
+      box.appendChild(group);
+    });
+  }
+
+  function refreshDynamicLanguage(){
+    if (watchId != null) {
+      toggleBtn.textContent = t('toggle.stop');
+      setStatus('live', t('status.live'));
+    } else {
+      toggleBtn.textContent = t('toggle.start');
+      if (!statusEl.classList.contains('error')) setStatus('', t('status.waiting'));
+    }
+    if (voiceToggleBtn) voiceToggleBtn.textContent = voiceEnabled ? t('voice.on') : t('voice.off');
+    if (trackToggleBtn) trackToggleBtn.textContent = tracking ? t('track.pause') : t('track.follow');
+    if (routeCalcBtn && !routeLoading) routeCalcBtn.textContent = t('route.recalc');
+    if (originSearchBtn && !originSearchBtn.disabled) originSearchBtn.textContent = t('origin.validate');
+    if (destSearchBtn && !destSearchBtn.disabled) destSearchBtn.textContent = t('dest.search');
+    if (fabNav) fabNav.setAttribute('title', t('fab.nav'));
+    if (fabShare) fabShare.setAttribute('title', t('fab.share'));
+    refreshVoices();
+    refreshVehicleUI();
+    renderLanguagePicker();
+    renderFavorites();
+    renderHazards();
+    renderHistory();
+    renderWaypoints();
+    renderTruckSources();
+    updateTrafficEtaDisplay(baseRouteSeconds);
+    if (typeof lastOfficialNet !== 'undefined' && lastOfficialNet) {
+      renderOfficialTruckNetwork(lastOfficialNet);
+    }
+    if (guidanceSteps.length && lastLatLng) updateGuidance(lastLatLng[0], lastLatLng[1]);
+    else if (guidanceInstrEl && !guidanceSteps.length) guidanceInstrEl.textContent = t('guidance.wait');
+    if (refreshDynamicLanguage._ready) {
+      try { refreshTruckLayer(); } catch (e) { /* ignore */ }
+      try { refreshPoiLayer(); } catch (e) { /* ignore */ }
+    }
+  }
+  refreshDynamicLanguage._ready = false;
+
+  renderLanguagePicker();
+  refreshDynamicLanguage();
+  refreshDynamicLanguage._ready = true;
+  if (window.I18n) I18n.onChange(refreshDynamicLanguage);
 </script>
 
 </body>
