@@ -5,13 +5,13 @@
  */
 (function (global) {
   const STORAGE_USERS = 'positionGpsUsers_v1';
-  const STORAGE_SESSION = 'positionGpsSession_v1';
+  const STORAGE_SESSION = 'positionGpsSession_v2';
   const ADMIN_USERNAME = 'admin';
   // Mot de passe admin : GpsCamion#Admin26  (hash SHA-256 + sel fixe app)
   const ADMIN_SALT = 'position-gps-camion-v1';
   const ADMIN_PASSWORD_PLAIN = 'GpsCamion#Admin26';
   /** Clé partagée Gregory / Cursor — ne pas afficher à l'écran. */
-  const SHARED_ACCESS = ['cursor'];
+  const SHARED_ACCESS = ['greg'];
 
   async function sha256(text) {
     if (global.crypto && crypto.subtle) {
