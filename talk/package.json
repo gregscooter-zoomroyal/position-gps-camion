@@ -1,0 +1,21 @@
+{
+  "name": "talk",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Talk — cales communautaires et éclats en direct",
+  "engines": {
+    "node": ">=22.14"
+  },
+  "scripts": {
+    "start": "node --disable-warning=ExperimentalWarning src/serve.js",
+    "test": "node --disable-warning=ExperimentalWarning --test test/parcours.js",
+    "test:direct": "node --disable-warning=ExperimentalWarning test/direct.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.3"
+  },
+  "devDependencies": {
+    "puppeteer-core": "^24.23.0"
+  }
+}
