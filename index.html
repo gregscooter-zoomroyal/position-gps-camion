@@ -343,6 +343,41 @@
   .gps-gate-card input {
     margin-bottom: 10px;
   }
+  .gps-gate-pass-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 10px;
+    align-items: stretch;
+  }
+  .gps-gate-pass-row input {
+    flex: 1;
+    width: auto;
+    min-width: 0;
+    margin-bottom: 0;
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    font-size: 13px;
+    padding: 11px 14px;
+  }
+  .gps-gate-pass-row input:focus { outline: 1px solid var(--amber-dim); }
+  .gps-gate-pass-row input::placeholder { color: var(--text-dim); }
+  .gps-gate-pass-row button {
+    width: auto;
+    flex-shrink: 0;
+    padding: 11px 14px;
+    background: var(--panel-2);
+    color: var(--text);
+    border: 1px solid var(--line);
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .gps-gate-pass-row button[aria-pressed="true"] {
+    color: var(--amber);
+    border-color: var(--amber-dim);
+  }
 
   .lang-country { margin: 4px 0 18px; }
   .lang-country-name {
@@ -863,7 +898,10 @@
   <form id="gps-gate-form" class="gps-gate-card" autocomplete="on">
     <div class="gate-brand">Position<span>·</span>GPS</div>
     <p data-i18n="gate.copy">GPS privé — en construction. Accès réservé.</p>
-    <input id="gps-gate-pass" type="password" required autocomplete="current-password" data-i18n-placeholder="gate.pass" placeholder="Mot de passe">
+    <div class="gps-gate-pass-row">
+      <input id="gps-gate-pass" type="password" required autocomplete="current-password" data-i18n-placeholder="gate.pass" placeholder="Mot de passe">
+      <button type="button" id="gps-gate-toggle" aria-pressed="false">Afficher</button>
+    </div>
     <div id="gps-gate-err" class="field-error"></div>
     <button type="submit" data-i18n="gate.enter">Entrer</button>
   </form>
@@ -1153,10 +1191,10 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
-<script src="./auth.js?v=21"></script>
-<script src="./i18n.js?v=21"></script>
-<script src="./nav-pro.js?v=21"></script>
-<script src="./truck-network.js?v=21"></script>
+<script src="./auth.js?v=22"></script>
+<script src="./i18n.js?v=22"></script>
+<script src="./nav-pro.js?v=22"></script>
+<script src="./truck-network.js?v=22"></script>
 <script>
   function t(key, vars){
     return (window.I18n && I18n.t) ? I18n.t(key, vars) : key;
@@ -1172,7 +1210,22 @@
     const form = document.getElementById('gps-gate-form');
     const passEl = document.getElementById('gps-gate-pass');
     const errEl = document.getElementById('gps-gate-err');
+    const toggleEl = document.getElementById('gps-gate-toggle');
     if (!form || !window.PositionAuth) return;
+    function syncPassToggle(){
+      if (!toggleEl || !passEl) return;
+      const visible = passEl.type === 'text';
+      toggleEl.textContent = t(visible ? 'gate.hide' : 'gate.show');
+      toggleEl.setAttribute('aria-pressed', visible ? 'true' : 'false');
+    }
+    syncPassToggle();
+    if (window.I18n) I18n.onChange(syncPassToggle);
+    if (toggleEl) {
+      toggleEl.addEventListener('click', function () {
+        passEl.type = passEl.type === 'password' ? 'text' : 'password';
+        syncPassToggle();
+      });
+    }
     PositionAuth.ensureAdmin().then(function () {
       if (PositionAuth.hasAccess()) gpsUnlockUi();
     });
@@ -1192,6 +1245,8 @@
         PositionAuth.logout();
         document.body.classList.add('gps-locked');
         passEl.value = '';
+        passEl.type = 'password';
+        syncPassToggle();
       });
     }
   })();
