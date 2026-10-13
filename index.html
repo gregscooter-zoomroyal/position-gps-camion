@@ -346,9 +346,11 @@
   }
   .lang-btn .lang-check {
     font-family: 'Space Mono', monospace;
-    font-size: 11px;
+    font-size: 16px;
     color: var(--amber);
     flex-shrink: 0;
+    min-width: 1.2em;
+    text-align: right;
   }
 
   /* ── Panel sections ── */
@@ -639,6 +641,7 @@
 
   /* ── Navigation Pro ── */
   body.nav-mode #sheet { display: none; }
+  body.lang-tab #sheet { height: min(72vh, 640px); }
   body.nav-mode #map-stage { flex: 1; }
   body.nav-mode header .title { font-size: 13px; }
   body.nav-mode #guidance-banner { top: 8px; }
@@ -3603,6 +3606,11 @@
     document.querySelectorAll('.tab-panel').forEach(panel => {
       panel.classList.toggle('active', panel.dataset.panel === name);
     });
+    document.body.classList.toggle('lang-tab', name === 'langue');
+    if (name === 'langue') {
+      const body = document.querySelector('.sheet-body');
+      if (body) body.scrollTop = 0;
+    }
     setTimeout(() => { try { map.invalidateSize(); } catch (e) {} }, 50);
   }
   document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -3630,7 +3638,7 @@
         btn.innerHTML =
           '<span><div class="lang-native">' + loc.native + '</div>' +
           '<div class="lang-meta">' + t('country.' + loc.country) + ' · ' + loc.id + '</div></span>' +
-          (loc.id === selected ? '<span class="lang-check">● ' + t('lang.current') + '</span>' : '');
+          (loc.id === selected ? '<span class="lang-check">' + t('lang.current') + '</span>' : '');
         btn.addEventListener('click', () => {
           I18n.setLocale(loc.id);
         });
