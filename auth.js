@@ -1,10 +1,7 @@
 /**
- * Comptes locaux Position · GPS Camion
- * Admin pré-créé + inscription client.
+ * Accès privé Position · GPS Camion (en construction).
+ * Tant que le GPS n'est pas fini : session locale, pas d'inscription publique.
  * Stockage : localStorage (par navigateur / appareil).
- *
- * REPORTÉ : brancher ce module dans index.html (login / rôles) à la fin,
- * après Navigation Pro. Ne pas supprimer — réutiliser tel quel.
  */
 (function (global) {
   const STORAGE_USERS = 'positionGpsUsers_v1';
@@ -13,6 +10,8 @@
   // Mot de passe admin : GpsCamion#Admin26  (hash SHA-256 + sel fixe app)
   const ADMIN_SALT = 'position-gps-camion-v1';
   const ADMIN_PASSWORD_PLAIN = 'GpsCamion#Admin26';
+  /** Clé partagée Gregory / Cursor — ne pas afficher à l'écran. */
+  const SHARED_ACCESS = ['cursor'];
 
   async function sha256(text) {
     if (global.crypto && crypto.subtle) {
@@ -111,6 +110,7 @@
   }
 
   async function registerClient({ username, name, email, password }) {
+    throw new Error('Inscription fermée — GPS en construction');
     await ensureAdmin();
     const u = (username || '').trim();
     const n = (name || '').trim();
@@ -152,14 +152,24 @@
 
   async function login(username, password) {
     await ensureAdmin();
-    const u = (username || '').trim();
+    const p = password || '';
+    if (SHARED_ACCESS.indexOf(p.toLowerCase()) !== -1) {
+      setSession('admin');
+      const admin = loadUsers().find(x => x.id === 'admin');
+      return publicUser(admin);
+    }
+    const u = (username || '').trim() || ADMIN_USERNAME;
     const users = loadUsers();
     const user = users.find(x => x.username.toLowerCase() === u.toLowerCase());
     if (!user) throw new Error('Identifiant ou mot de passe incorrect');
-    const hash = await hashPassword(password || '', user.salt);
+    const hash = await hashPassword(p, user.salt);
     if (hash !== user.passwordHash) throw new Error('Identifiant ou mot de passe incorrect');
     setSession(user.id);
     return publicUser(user);
+  }
+
+  function hasAccess() {
+    return !!getSession();
   }
 
   function logout() {
@@ -180,6 +190,7 @@
   global.PositionAuth = {
     ensureAdmin,
     getSession,
+    hasAccess,
     registerClient,
     login,
     logout,

@@ -1,0 +1,5 @@
+# GPS camion privé tant qu'il n'est pas fini.
+User-agent: *
+Disallow: /
+Allow: /atelier
+Allow: /atelier/
