@@ -65,7 +65,7 @@ function sessionDe(req, base) {
 
 function exiger(req, base) {
   const utilisateur = sessionDe(req, base);
-  if (!utilisateur) throw erreur(401, 'Il faut entrer.');
+  if (!utilisateur) throw erreur(401, 'Il faut se connecter.');
   return utilisateur;
 }
 
@@ -212,7 +212,7 @@ async function api(req, res, contexte, pathname) {
     const id = base.creerEclat(m[2], utilisateur.id);
     if (!temps.lierDiffuseur(id, utilisateur.id, m[2])) {
       base.eteindre(id);
-      throw erreur(409, 'Ouvrez la cale avant d’allumer un éclat.');
+      throw erreur(409, 'Ouvrez le groupe avant de lancer un direct.');
     }
     const eclat = base.formeEclat(base.eclatParId(id));
     temps.annoncerEclat(eclat);
@@ -272,6 +272,36 @@ async function api(req, res, contexte, pathname) {
     const ligne = base.rayerHoule(m[2], utilisateur.id);
     temps.diffuserCale(ligne.caleId, { type: 'houle-rayee', ligneId: ligne.id, eclatId: ligne.eclatId });
     envoyer(res, 200, { ok: true });
+    return;
+  }
+
+  if (m[1] === 'amis' && m.length === 2 && req.method === 'GET') {
+    const utilisateur = exiger(req, base);
+    envoyer(res, 200, base.listerAmis(utilisateur.id));
+    return;
+  }
+
+  if (m[1] === 'amis' && m.length === 2 && req.method === 'POST') {
+    const utilisateur = exiger(req, base);
+    const body = await lireJson(req);
+    const ami = base.ajouterAmi(utilisateur.id, body.identifiant);
+    envoyer(res, 201, ami);
+    return;
+  }
+
+  if (m[1] === 'amis' && m[3] === 'messages' && m.length === 4 && req.method === 'GET') {
+    const utilisateur = exiger(req, base);
+    envoyer(res, 200, base.listerPrives(utilisateur.id, m[2]));
+    return;
+  }
+
+  if (m[1] === 'amis' && m[3] === 'messages' && m.length === 4 && req.method === 'POST') {
+    const utilisateur = exiger(req, base);
+    const body = await lireJson(req);
+    const message = base.poserPrive(utilisateur.id, m[2], body.corps);
+    temps.diffuserUtilisateur(message.deId, { type: 'prive', message });
+    temps.diffuserUtilisateur(message.versId, { type: 'prive', message });
+    envoyer(res, 201, message);
     return;
   }
 

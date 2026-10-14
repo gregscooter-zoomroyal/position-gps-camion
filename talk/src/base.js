@@ -55,11 +55,11 @@ function motDePasse(v) {
 }
 
 function corpsPropre(v) {
-  if (typeof v !== 'string') throw erreur(400, 'La ligne est vide.');
+  if (typeof v !== 'string') throw erreur(400, 'Le message est vide.');
   const t = v.trim();
-  if (!t) throw erreur(400, 'La ligne est vide.');
-  if (t.length > 1000) throw erreur(400, 'La ligne dépasse 1000 caractères.');
-  if (t.includes('\0')) throw erreur(400, 'La ligne contient un caractère interdit.');
+  if (!t) throw erreur(400, 'Le message est vide.');
+  if (t.length > 1000) throw erreur(400, 'Le message dépasse 1000 caractères.');
+  if (t.includes('\0')) throw erreur(400, 'Le message contient un caractère interdit.');
   return t;
 }
 
@@ -153,6 +153,20 @@ export function creerBase(dbPath = cheminParDefaut()) {
     CREATE INDEX IF NOT EXISTS idx_houle_eclat ON houle(eclat_id, cree_le);
     CREATE INDEX IF NOT EXISTS idx_membres_user ON membres(user_id);
     CREATE INDEX IF NOT EXISTS idx_eclats_cale ON eclats(cale_id, eteint_le);
+    CREATE TABLE IF NOT EXISTS amis (
+      user_id TEXT NOT NULL,
+      ami_id TEXT NOT NULL,
+      cree_le INTEGER NOT NULL,
+      PRIMARY KEY (user_id, ami_id)
+    );
+    CREATE TABLE IF NOT EXISTS prives (
+      id TEXT PRIMARY KEY,
+      de_id TEXT NOT NULL,
+      vers_id TEXT NOT NULL,
+      corps TEXT NOT NULL,
+      cree_le INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_prives_pair ON prives(de_id, vers_id, cree_le);
   `);
 
   const bidon = saler('talk-bidon-mot-de-passe');
@@ -177,7 +191,7 @@ export function creerBase(dbPath = cheminParDefaut()) {
       const pris = db.prepare('SELECT 1 FROM cales WHERE amarre = ?').get(code);
       if (!pris) return code;
     }
-    throw erreur(500, 'Impossible de tirer une amarre.');
+    throw erreur(500, 'Impossible de créer un code d’invitation.');
   }
 
   function membre(caleId, userId) {
@@ -243,7 +257,7 @@ export function creerBase(dbPath = cheminParDefaut()) {
 
   function exigerMembre(caleId, userId) {
     const m = membre(caleId, userId);
-    if (!m) throw erreur(403, 'Vous n’êtes pas amarré à cette cale.');
+    if (!m) throw erreur(403, 'Vous n’êtes pas dans ce groupe.');
     return m;
   }
 
@@ -322,7 +336,7 @@ export function creerBase(dbPath = cheminParDefaut()) {
     },
 
     creerCale({ nom, resume, userId }) {
-      const nomOk = exigerChaine(nom, 2, 48, 'Le nom de la cale doit faire entre 2 et 48 caractères.');
+      const nomOk = exigerChaine(nom, 2, 48, 'Le nom du groupe doit faire entre 2 et 48 caractères.');
       let resumeOk = '';
       if (resume != null && resume !== '') {
         resumeOk = exigerChaine(resume, 0, 160, 'Le résumé dépasse 160 caractères.');
@@ -335,18 +349,18 @@ export function creerBase(dbPath = cheminParDefaut()) {
         db.prepare('INSERT INTO membres (cale_id, user_id, role, joint_le) VALUES (?, ?, ?, ?)')
           .run(caleId, userId, 'lampiste', maintenant);
         db.prepare('INSERT INTO courants (id, cale_id, nom, cree_le) VALUES (?, ?, ?, ?)')
-          .run(randomUUID(), caleId, 'Grand large', maintenant);
+          .run(randomUUID(), caleId, 'Conversation', maintenant);
         return caleId;
       });
       return this.lireCale(id, userId);
     },
 
     rejoindre(code, userId) {
-      if (typeof code !== 'string') throw erreur(400, 'Le code d’amarre manque.');
+      if (typeof code !== 'string') throw erreur(400, 'Le code d’invitation manque.');
       const amarre = code.trim().toUpperCase().replace(/\s+/g, '');
-      if (!/^[A-Z2-9]{6}$/.test(amarre)) throw erreur(400, 'Une amarre compte 6 caractères.');
+      if (!/^[A-Z2-9]{6}$/.test(amarre)) throw erreur(400, 'Un code d’invitation compte 6 caractères.');
       const cale = db.prepare('SELECT id FROM cales WHERE amarre = ?').get(amarre);
-      if (!cale) throw erreur(404, 'Aucune cale pour cette amarre.');
+      if (!cale) throw erreur(404, 'Aucun groupe pour ce code.');
       const deja = membre(cale.id, userId);
       if (!deja) {
         db.prepare('INSERT INTO membres (cale_id, user_id, role, joint_le) VALUES (?, ?, ?, ?)')
@@ -357,7 +371,7 @@ export function creerBase(dbPath = cheminParDefaut()) {
 
     lireCale(caleId, userId) {
       const cale = db.prepare('SELECT * FROM cales WHERE id = ?').get(caleId);
-      if (!cale) throw erreur(404, 'Cale introuvable.');
+      if (!cale) throw erreur(404, 'Groupe introuvable.');
       const moi = exigerMembre(caleId, userId);
       const courants = db.prepare('SELECT id, nom FROM courants WHERE cale_id = ? ORDER BY cree_le ASC').all(caleId);
       return {
@@ -374,11 +388,11 @@ export function creerBase(dbPath = cheminParDefaut()) {
 
     ajouterCourant(caleId, userId, nom) {
       const m = exigerMembre(caleId, userId);
-      if (m.role === 'passant') throw erreur(403, 'Un passant ne crée pas de courant.');
-      const nomOk = exigerChaine(nom, 2, 32, 'Le nom du courant doit faire entre 2 et 32 caractères.');
+      if (m.role === 'passant') throw erreur(403, 'Un membre ne crée pas de conversation.');
+      const nomOk = exigerChaine(nom, 2, 32, 'Le nom de la conversation doit faire entre 2 et 32 caractères.');
       const noms = db.prepare('SELECT nom FROM courants WHERE cale_id = ?').all(caleId);
       if (noms.some((n) => n.nom.toLocaleLowerCase('fr') === nomOk.toLocaleLowerCase('fr'))) {
-        throw erreur(409, 'Ce courant existe déjà.');
+        throw erreur(409, 'Cette conversation existe déjà.');
       }
       const id = randomUUID();
       db.prepare('INSERT INTO courants (id, cale_id, nom, cree_le) VALUES (?, ?, ?, ?)').run(id, caleId, nomOk, Date.now());
@@ -390,8 +404,8 @@ export function creerBase(dbPath = cheminParDefaut()) {
       const acteur = exigerMembre(caleId, acteurId);
       const cible = membre(caleId, cibleId);
       if (!cible) throw erreur(404, 'Membre introuvable.');
-      if (acteur.role !== 'lampiste') throw erreur(403, 'Seul le lampiste nomme les veilleurs.');
-      if (cible.role === 'lampiste') throw erreur(403, 'Le lampiste garde son rôle.');
+      if (acteur.role !== 'lampiste') throw erreur(403, 'Seul le propriétaire nomme les modérateurs.');
+      if (cible.role === 'lampiste') throw erreur(403, 'Le propriétaire garde son rôle.');
       db.prepare('UPDATE membres SET role = ? WHERE cale_id = ? AND user_id = ?').run(role, caleId, cibleId);
       return membresDe(caleId);
     },
@@ -400,11 +414,11 @@ export function creerBase(dbPath = cheminParDefaut()) {
       const acteur = exigerMembre(caleId, acteurId);
       const cible = membre(caleId, cibleId);
       if (!cible) throw erreur(404, 'Membre introuvable.');
-      if (cible.role === 'lampiste') throw erreur(403, 'Le lampiste ne peut pas être retiré.');
+      if (cible.role === 'lampiste') throw erreur(403, 'Le propriétaire ne peut pas être retiré.');
       if (acteurId === cibleId) throw erreur(403, 'Vous ne pouvez pas vous retirer ainsi.');
       if (acteur.role === 'passant') throw erreur(403, 'Vous ne pouvez pas retirer un membre.');
       if (acteur.role === 'veilleur' && cible.role !== 'passant') {
-        throw erreur(403, 'Un veilleur ne retire qu’un passant.');
+        throw erreur(403, 'Un modérateur ne retire qu’un membre.');
       }
       const eclat = eclatActif(caleId);
       return { eclatId: eclat && eclat.auteur_id === cibleId ? eclat.id : null };
@@ -419,7 +433,7 @@ export function creerBase(dbPath = cheminParDefaut()) {
 
     listerLignes(courantId, userId) {
       const courant = lireCourant(courantId);
-      if (!courant) throw erreur(404, 'Courant introuvable.');
+      if (!courant) throw erreur(404, 'Conversation introuvable.');
       exigerMembre(courant.cale_id, userId);
       return db.prepare(`
         SELECT * FROM (
@@ -435,7 +449,7 @@ export function creerBase(dbPath = cheminParDefaut()) {
 
     poserLigne(courantId, userId, corps) {
       const courant = lireCourant(courantId);
-      if (!courant) throw erreur(404, 'Courant introuvable.');
+      if (!courant) throw erreur(404, 'Conversation introuvable.');
       exigerMembre(courant.cale_id, userId);
       const texte = corpsPropre(corps);
       const id = randomUUID();
@@ -447,10 +461,10 @@ export function creerBase(dbPath = cheminParDefaut()) {
 
     rayerLigne(ligneId, userId) {
       const ligne = lireLigne(ligneId);
-      if (!ligne) throw erreur(404, 'Ligne introuvable.');
+      if (!ligne) throw erreur(404, 'Message introuvable.');
       const m = exigerMembre(ligne.caleId, userId);
       const peut = ligne.auteurId === userId || m.role === 'lampiste' || m.role === 'veilleur';
-      if (!peut) throw erreur(403, 'Vous ne pouvez pas rayer cette ligne.');
+      if (!peut) throw erreur(403, 'Vous ne pouvez pas supprimer ce message.');
       db.prepare('DELETE FROM lignes WHERE id = ?').run(ligneId);
       return ligne;
     },
@@ -458,7 +472,7 @@ export function creerBase(dbPath = cheminParDefaut()) {
     creerEclat(caleId, userId) {
       exigerMembre(caleId, userId);
       return transaction(() => {
-        if (eclatActif(caleId)) throw erreur(409, 'Un éclat est déjà allumé dans cette cale.');
+        if (eclatActif(caleId)) throw erreur(409, 'Un direct est déjà lancé dans ce groupe.');
         const id = randomUUID();
         db.prepare('INSERT INTO eclats (id, cale_id, auteur_id, allume_le) VALUES (?, ?, ?, ?)')
           .run(id, caleId, userId, Date.now());
@@ -478,18 +492,18 @@ export function creerBase(dbPath = cheminParDefaut()) {
     formeEclat,
 
     peutEteindre(eclat, userId) {
-      if (!eclat || eclat.eteint_le) throw erreur(404, 'Aucun éclat à éteindre.');
+      if (!eclat || eclat.eteint_le) throw erreur(404, 'Aucun direct à arrêter.');
       const m = exigerMembre(eclat.cale_id, userId);
       if (eclat.auteur_id === userId) return m;
       if (m.role === 'passant') {
-        throw erreur(403, 'Seul le veilleur, le lampiste ou la personne qui tient l’éclat peut l’éteindre.');
+        throw erreur(403, 'Seul le modérateur, le propriétaire ou la personne qui tient le direct peut l’arrêter.');
       }
       return m;
     },
 
     listerHoule(eclatId, userId) {
       const eclat = eclatParId(eclatId);
-      if (!eclat) throw erreur(404, 'Éclat introuvable.');
+      if (!eclat) throw erreur(404, 'Direct introuvable.');
       exigerMembre(eclat.cale_id, userId);
       return db.prepare(`
         SELECT * FROM (
@@ -505,8 +519,8 @@ export function creerBase(dbPath = cheminParDefaut()) {
 
     poserHoule(eclatId, userId, corps) {
       const eclat = eclatParId(eclatId);
-      if (!eclat) throw erreur(404, 'Éclat introuvable.');
-      if (eclat.eteint_le) throw erreur(410, 'Cet éclat est éteint.');
+      if (!eclat) throw erreur(404, 'Direct introuvable.');
+      if (eclat.eteint_le) throw erreur(410, 'Ce direct est terminé.');
       exigerMembre(eclat.cale_id, userId);
       const texte = corpsPropre(corps);
       const id = randomUUID();
@@ -518,16 +532,65 @@ export function creerBase(dbPath = cheminParDefaut()) {
 
     rayerHoule(houleId, userId) {
       const ligne = lireHoule(houleId);
-      if (!ligne) throw erreur(404, 'Parole introuvable.');
+      if (!ligne) throw erreur(404, 'Message introuvable.');
       const m = exigerMembre(ligne.caleId, userId);
       const peut = ligne.auteurId === userId || m.role === 'lampiste' || m.role === 'veilleur';
-      if (!peut) throw erreur(403, 'Vous ne pouvez pas rayer cette parole.');
+      if (!peut) throw erreur(403, 'Vous ne pouvez pas supprimer ce message.');
       db.prepare('DELETE FROM houle WHERE id = ?').run(houleId);
       return ligne;
     },
 
     eclatsTenusPar(userId) {
       return db.prepare('SELECT id, cale_id FROM eclats WHERE auteur_id = ? AND eteint_le IS NULL').all(userId);
+    },
+
+    ajouterAmi(userId, identifiant) {
+      const idOk = identifiantPropre(identifiant);
+      const autre = db.prepare('SELECT id, identifiant, nom FROM users WHERE identifiant = ?').get(idOk);
+      if (!autre) throw erreur(404, 'Aucune personne avec cet identifiant.');
+      if (autre.id === userId) throw erreur(400, 'Vous ne pouvez pas vous ajouter.');
+      transaction(() => {
+        const deja = db.prepare('SELECT 1 FROM amis WHERE user_id = ? AND ami_id = ?').get(userId, autre.id);
+        if (deja) return;
+        const maintenant = Date.now();
+        db.prepare('INSERT INTO amis (user_id, ami_id, cree_le) VALUES (?, ?, ?)').run(userId, autre.id, maintenant);
+        db.prepare('INSERT INTO amis (user_id, ami_id, cree_le) VALUES (?, ?, ?)').run(autre.id, userId, maintenant);
+      });
+      return { id: autre.id, identifiant: autre.identifiant, nom: autre.nom };
+    },
+
+    listerAmis(userId) {
+      const rows = db.prepare(`
+        SELECT u.id, u.identifiant, u.nom
+        FROM amis a JOIN users u ON u.id = a.ami_id
+        WHERE a.user_id = ?
+      `).all(userId);
+      rows.sort((a, b) => a.nom.localeCompare(b.nom, 'fr'));
+      return rows;
+    },
+
+    sontAmis(userId, amiId) {
+      return Boolean(db.prepare('SELECT 1 FROM amis WHERE user_id = ? AND ami_id = ?').get(userId, amiId));
+    },
+
+    listerPrives(userId, amiId) {
+      if (!this.sontAmis(userId, amiId)) throw erreur(403, 'Cette personne n’est pas dans vos amis.');
+      return db.prepare(`
+        SELECT p.id, p.de_id AS deId, p.vers_id AS versId, p.corps, p.cree_le AS creeLe, u.nom AS auteurNom
+        FROM prives p JOIN users u ON u.id = p.de_id
+        WHERE (p.de_id = ? AND p.vers_id = ?) OR (p.de_id = ? AND p.vers_id = ?)
+        ORDER BY p.cree_le ASC
+      `).all(userId, amiId, amiId, userId);
+    },
+
+    poserPrive(userId, amiId, corps) {
+      if (!this.sontAmis(userId, amiId)) throw erreur(403, 'Cette personne n’est pas dans vos amis.');
+      const texte = corpsPropre(corps);
+      const id = randomUUID();
+      const creeLe = Date.now();
+      db.prepare('INSERT INTO prives (id, de_id, vers_id, corps, cree_le) VALUES (?, ?, ?, ?, ?)').run(id, userId, amiId, texte, creeLe);
+      const auteur = db.prepare('SELECT nom FROM users WHERE id = ?').get(userId);
+      return { id, deId: userId, versId: amiId, corps: texte, creeLe, auteurNom: auteur.nom };
     },
   };
 }

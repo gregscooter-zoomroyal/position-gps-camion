@@ -19,6 +19,7 @@ export function brancherTempsReel(server, contexte) {
   const diffuseur = new Map();
   const places = new Map();
   const graces = new Map();
+  const voix = new Map();
   let arrete = false;
 
   function envoyer(ws, message) {
@@ -55,6 +56,65 @@ export function brancherTempsReel(server, contexte) {
     for (const [ws, info] of clients) {
       if (info.caleId === caleId) envoyer(ws, message);
     }
+  }
+
+  function diffuserUtilisateur(userId, message) {
+    for (const [ws, info] of clients) {
+      if (info.user.id === userId) envoyer(ws, message);
+    }
+  }
+
+  function listeVoix(caleId) {
+    const map = voix.get(caleId);
+    if (!map) return [];
+    return [...map.entries()]
+      .map(([id, v]) => ({ id, nom: v.nom }))
+      .sort((a, b) => a.nom.localeCompare(b.nom, 'fr'));
+  }
+
+  function diffuserVoix(caleId) {
+    if (!caleId) return;
+    diffuserCale(caleId, { type: 'voix', caleId, personnes: listeVoix(caleId) });
+  }
+
+  function quitterVoix(info) {
+    const caleId = info.enVoix;
+    if (!caleId) return;
+    info.enVoix = null;
+    const map = voix.get(caleId);
+    if (map) {
+      map.delete(info.user.id);
+      for (const autre of map.values()) {
+        envoyer(autre.ws, { type: 'voix-parti', caleId, id: info.user.id });
+      }
+      if (!map.size) voix.delete(caleId);
+    }
+    diffuserVoix(caleId);
+  }
+
+  function rejoindreVoix(ws, info) {
+    if (!info.caleId) return;
+    if (info.enVoix && info.enVoix !== info.caleId) quitterVoix(info);
+    let map = voix.get(info.caleId);
+    if (!map) {
+      map = new Map();
+      voix.set(info.caleId, map);
+    }
+    const autres = [...map.entries()]
+      .filter(([id]) => id !== info.user.id)
+      .map(([id, v]) => ({ id, nom: v.nom }));
+    map.set(info.user.id, { ws, nom: info.user.nom });
+    info.enVoix = info.caleId;
+    envoyer(ws, { type: 'voix-deja', caleId: info.caleId, personnes: autres });
+    for (const personne of autres) {
+      envoyer(map.get(personne.id).ws, {
+        type: 'voix-arrivee',
+        caleId: info.caleId,
+        id: info.user.id,
+        nom: info.user.nom,
+      });
+    }
+    diffuserVoix(info.caleId);
   }
 
   function annoncerEclat(eclat) {
@@ -122,6 +182,7 @@ export function brancherTempsReel(server, contexte) {
     for (const [ws, info] of clients) {
       if (info.user.id !== userId) continue;
       retirerPlace(info);
+      if (info.enVoix === caleId) quitterVoix(info);
       if (info.caleId === caleId) info.caleId = null;
       envoyer(ws, { type: 'retire', caleId });
     }
@@ -163,7 +224,7 @@ export function brancherTempsReel(server, contexte) {
   }
 
   function accueillir(ws, utilisateur) {
-    const info = { user: utilisateur, caleId: null, role: null, eclatAssis: null };
+    const info = { user: utilisateur, caleId: null, role: null, eclatAssis: null, enVoix: null };
     clients.set(ws, info);
 
     ws.on('message', (data, isBinary) => {
@@ -185,10 +246,11 @@ export function brancherTempsReel(server, contexte) {
       if (msg.type === 'entrer' && typeof msg.caleId === 'string') {
         const m = base.membre(msg.caleId, info.user.id);
         if (!m) {
-          envoyer(ws, { type: 'erreur', message: 'Cale inaccessible.' });
+          envoyer(ws, { type: 'erreur', message: 'Groupe inaccessible.' });
           return;
         }
         const avant = info.caleId;
+        if (avant && avant !== msg.caleId && info.enVoix === avant) quitterVoix(info);
         info.caleId = msg.caleId;
         info.role = m.role;
         if (avant && avant !== msg.caleId) diffuserPresence(avant);
@@ -196,14 +258,34 @@ export function brancherTempsReel(server, contexte) {
         const eclat = base.formeEclat(base.eclatActif(msg.caleId));
         envoyer(ws, { type: 'eclat', caleId: msg.caleId, eclat });
         if (eclat) envoyer(ws, { type: 'assis', eclatId: eclat.id, nombre: nombreAssis(eclat.id) });
+        envoyer(ws, { type: 'voix', caleId: msg.caleId, personnes: listeVoix(msg.caleId) });
         return;
       }
 
       if (msg.type === 'sortir-cale') {
         const avant = info.caleId;
         retirerPlace(info);
+        if (info.enVoix) quitterVoix(info);
         info.caleId = null;
         if (avant) diffuserPresence(avant);
+        return;
+      }
+
+      if (msg.type === 'voix-rejoindre') {
+        rejoindreVoix(ws, info);
+        return;
+      }
+
+      if (msg.type === 'voix-quitter') {
+        quitterVoix(info);
+        return;
+      }
+
+      if (msg.type === 'voix-signal') {
+        if (!info.enVoix || typeof msg.pour !== 'string' || !chargeValide(msg.charge)) return;
+        const autre = voix.get(info.enVoix)?.get(msg.pour);
+        if (!autre || autre.ws === ws) return;
+        envoyer(autre.ws, { type: 'voix-signal', caleId: info.enVoix, de: info.user.id, charge: msg.charge });
         return;
       }
 
@@ -254,6 +336,7 @@ export function brancherTempsReel(server, contexte) {
       clients.delete(ws);
       if (arrete) return;
       retirerPlace(info);
+      quitterVoix(info);
       for (const [eclatId, sock] of diffuseur) {
         if (sock === ws) programmerFin(eclatId, ws);
       }
@@ -291,6 +374,7 @@ export function brancherTempsReel(server, contexte) {
   return {
     diffuserCale,
     diffuserMembres,
+    diffuserUtilisateur,
     annoncerEclat,
     lierDiffuseur,
     finirEclat,

@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Talk — cales communautaires et éclats en direct",
+  "description": "Talk — groupes, conversations et directs",
   "engines": {
     "node": ">=22.14"
   },

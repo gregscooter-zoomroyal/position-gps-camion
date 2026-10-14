@@ -38,7 +38,7 @@ async function inscrire(page, identifiant, nom) {
   await saisir(page, '#identifiant', identifiant);
   await saisir(page, '#mot-de-passe', 'phare-du-soir');
   await page.click('[data-action=valider-seuil]');
-  await page.waitForFunction(() => document.body.innerText.includes('Le bassin de'));
+  await page.waitForFunction(() => document.body.innerText.includes('Mes groupes'));
 }
 
 const contexteA = await browser.createBrowserContext();
@@ -52,69 +52,83 @@ for (const page of [pageA, pageB]) {
 
 try {
   const sceau = Date.now().toString(36).slice(-6);
+  const identifiantB = `cami${sceau}`;
   await pageA.goto(base, { waitUntil: 'domcontentloaded' });
-  await pageA.waitForSelector('[data-action=basculer]');
-  await pageA.screenshot({ path: `${media}/talk-seuil.png` });
+  await pageA.waitForSelector('img.logo');
+  await pageA.waitForFunction(() => document.body.innerText.includes('Connexion'));
   await pageA.setViewport({ width: 390, height: 800 });
-  if (await debordement(pageA)) throw new Error('Le seuil déborde en largeur.');
+  if (await debordement(pageA)) throw new Error('La connexion déborde en largeur.');
   await pageA.setViewport({ width: 1280, height: 800 });
 
   await inscrire(pageA, `greg${sceau}`, 'Gregory');
   await saisir(pageA, '#nom-cale', 'Les pins du soir');
-  await saisir(pageA, '#resume-cale', 'Un bord pour se parler.');
+  await saisir(pageA, '#resume-cale', 'On se parle ici.');
   await pageA.click('[data-action=ouvrir-cale]');
   await pageA.waitForSelector('#code-amarre');
-  const amarre = await pageA.$eval('#code-amarre', (n) => n.textContent.trim());
+  const code = await pageA.$eval('#code-amarre', (n) => n.textContent.trim());
 
-  await saisir(pageA, '#corps', 'Le quai est ouvert ce soir.');
-  await pageA.click('[data-action=poser]');
-  await pageA.waitForFunction(() => document.body.innerText.includes('Le quai est ouvert ce soir.'));
-  await pageA.screenshot({ path: `${media}/talk-cale.png` });
+  await pageA.click('[data-action=accueil]');
+  await pageA.waitForFunction(() => document.body.innerText.includes('Choisissez un groupe'));
+  await pageA.waitForSelector('[data-groupe]');
+  await pageA.evaluate(() => { window.scrollTo(0, 0); document.activeElement?.blur?.(); });
+  await pageA.screenshot({ path: `${media}/talk-accueil.png` });
   await pageA.setViewport({ width: 390, height: 800 });
-  if (await debordement(pageA)) throw new Error('La cale déborde en largeur.');
+  if (await debordement(pageA)) throw new Error('L’accueil déborde en largeur.');
   await pageA.setViewport({ width: 1280, height: 800 });
 
+  await pageA.click('[data-groupe]');
+  await pageA.waitForSelector('#code-amarre');
+  await saisir(pageA, '#corps', 'Le groupe est ouvert.');
+  await pageA.click('[data-action=poser]');
+  await pageA.waitForFunction(() => [...document.querySelectorAll('.corps')].some((n) => n.textContent.includes('Le groupe est ouvert.')));
+
   await pageB.goto(base, { waitUntil: 'domcontentloaded' });
-  await inscrire(pageB, `cami${sceau}`, 'Camille');
-  await saisir(pageB, '#amarre', amarre);
+  await inscrire(pageB, identifiantB, 'Camille');
+  await saisir(pageB, '#amarre', code);
   await pageB.click('[data-action=rejoindre]');
-  await pageB.waitForFunction(() => document.body.innerText.includes('Le quai est ouvert ce soir.'));
+  await pageB.waitForFunction(() => document.body.innerText.includes('Le groupe est ouvert.'));
 
-  await pageA.waitForFunction(() => (document.getElementById('compte-quai')?.textContent || '').includes('2 à quai'));
+  await pageA.waitForFunction(() => (document.getElementById('compte-en-ligne')?.textContent || '').includes('2 en ligne'));
+  await pageA.click('[data-action=rejoindre-voix]');
+  await pageB.click('[data-action=rejoindre-voix]');
+  await pageA.waitForSelector('[data-action=quitter-voix]', { timeout: 10000 });
+  await pageB.waitForSelector('[data-action=quitter-voix]', { timeout: 10000 });
+  await pageA.waitForFunction(() => document.querySelectorAll('.tuile.dans-appel').length >= 2, { timeout: 10000 });
+  await pageA.evaluate(() => { window.scrollTo(0, 0); document.activeElement?.blur?.(); });
+  await pageA.screenshot({ path: `${media}/talk-groupe.png` });
+  await pageA.setViewport({ width: 390, height: 900 });
+  if (await debordement(pageA)) throw new Error('Le groupe déborde en largeur.');
+  await pageA.setViewport({ width: 1280, height: 800 });
 
-  await saisir(pageB, '#corps', 'Je suis à quai.');
+  await saisir(pageB, '#corps', 'Je suis là.');
   await pageB.click('[data-action=poser]');
-  await pageA.waitForFunction(() => [...document.querySelectorAll('.corps')].some((n) => n.textContent.includes('Je suis à quai.')));
+  await pageA.waitForFunction(() => [...document.querySelectorAll('.corps')].some((n) => n.textContent.includes('Je suis là.')));
   await pageA.evaluate(() => {
-    const ligne = [...document.querySelectorAll('.ligne-journal')].find((n) => n.textContent.includes('Je suis à quai.'));
-    ligne.querySelector('[data-action=rayer]').click();
+    const ligne = [...document.querySelectorAll('.ligne-journal')].find((n) => n.textContent.includes('Je suis là.'));
+    ligne.querySelector('[data-action=supprimer]').click();
   });
-  await pageA.waitForFunction(() => [...document.querySelectorAll('[data-action=rayer]')].some((b) => b.textContent.includes('Confirmer')));
+  await pageA.waitForFunction(() => [...document.querySelectorAll('[data-action=supprimer]')].some((b) => b.textContent.includes('Confirmer')));
   await pageA.evaluate(() => {
-    const ligne = [...document.querySelectorAll('.ligne-journal')].find((n) => n.textContent.includes('Je suis à quai.'));
-    ligne.querySelector('[data-action=rayer]').click();
+    const ligne = [...document.querySelectorAll('.ligne-journal')].find((n) => n.textContent.includes('Je suis là.'));
+    ligne.querySelector('[data-action=supprimer]').click();
   });
-  await pageB.waitForFunction(() => ![...document.querySelectorAll('.corps')].some((n) => n.textContent.includes('Je suis à quai.')));
+  await pageB.waitForFunction(() => ![...document.querySelectorAll('.corps')].some((n) => n.textContent.includes('Je suis là.')));
 
   await pageA.click('[data-action=allumer]');
   await pageA.waitForFunction(() => document.querySelector('#flux') || document.querySelector('[data-action=sans-lentille]'), { timeout: 10000 });
   if (await pageA.$('[data-action=sans-lentille]')) await pageA.click('[data-action=sans-lentille]');
   await pageA.waitForSelector('#flux');
-
-  await pageB.waitForSelector('[data-action=asseoir]', { timeout: 10000 });
-  await pageB.click('[data-action=asseoir]');
+  await pageB.waitForSelector('[data-action=regarder]', { timeout: 10000 });
+  await pageB.click('[data-action=regarder]');
   await pageB.waitForFunction(() => {
     const video = document.querySelector('#flux');
     return Boolean(video && video.videoWidth > 0);
   }, { timeout: 20000 });
-
-  await saisir(pageB, '#corps-houle', 'On vous voit.');
-  await pageB.click('[data-action=poser-houle]');
+  await saisir(pageB, '#corps-direct', 'On vous voit.');
+  await pageB.click('[data-action=poser-direct]');
   await pageA.waitForFunction(() => [...document.querySelectorAll('.corps')].some((n) => n.textContent.includes('On vous voit.')));
-  await pageA.setViewport({ width: 1280, height: 1100 });
-  await pageA.screenshot({ path: `${media}/talk-eclat.png` });
 
-  await pageA.click('#compte-quai');
+  await pageA.click('[data-action=membres]');
   await pageA.waitForSelector('[data-action=retirer]');
   await pageA.evaluate(() => {
     const ligne = [...document.querySelectorAll('[data-membre]')].find((n) => n.textContent.includes('Camille'));
@@ -124,7 +138,29 @@ try {
     const ligne = [...document.querySelectorAll('[data-membre]')].find((n) => n.textContent.includes('Camille'));
     ligne.querySelector('[data-action=retirer]').click();
   });
-  await pageB.waitForFunction(() => document.body.innerText.includes('Vous avez été retiré de la cale.'));
+  await pageB.waitForFunction(() => document.body.innerText.includes('Vous avez été retiré du groupe.'));
+
+  await pageA.click('[data-action=amis]');
+  await pageA.waitForSelector('#identifiant-ami');
+  await saisir(pageA, '#identifiant-ami', identifiantB);
+  await pageA.click('[data-action=ajouter-ami]');
+  await pageA.waitForFunction((id) => document.body.innerText.includes(id) && document.body.innerText.includes('Camille'), {}, identifiantB);
+  await pageA.evaluate(() => { window.scrollTo(0, 0); document.activeElement?.blur?.(); });
+  await pageA.screenshot({ path: `${media}/talk-amis.png` });
+
+  await pageA.click('[data-action=ecrire]');
+  await pageA.waitForSelector('#corps-prive');
+  await saisir(pageA, '#corps-prive', 'Bonjour Camille.');
+  await pageA.click('[data-action=envoyer-prive]');
+  await pageA.waitForFunction(() => [...document.querySelectorAll('.corps')].some((n) => n.textContent.includes('Bonjour Camille.')));
+  await pageA.evaluate(() => { window.scrollTo(0, 0); document.activeElement?.blur?.(); });
+  await pageA.screenshot({ path: `${media}/talk-messages.png` });
+
+  await pageB.click('[data-action=messages]');
+  await pageB.waitForSelector('[data-ami]');
+  await pageB.click('[data-ami]');
+  await pageB.waitForFunction(() => document.body.innerText.includes('Bonjour Camille.'));
+
   console.log('parcours direct ok');
 } finally {
   await browser.close();

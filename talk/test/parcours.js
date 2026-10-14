@@ -115,7 +115,7 @@ test('parcours Talk', async (t) => {
   });
   assert.equal(cale.status, 201);
   assert.equal(cale.json.role, 'lampiste');
-  assert.equal(cale.json.courants[0].nom, 'Grand large');
+  assert.equal(cale.json.courants[0].nom, 'Conversation');
   assert.equal(cale.json.amarre.length, 6);
 
   const refus = await c.appel(`/api/cales/${cale.json.id}`);
@@ -191,6 +191,31 @@ test('parcours Talk', async (t) => {
   const bassin = await a.appel('/api/bassin');
   assert.equal(bassin.json[0].nom, 'Les pins du soir');
   assert.equal(bassin.json[0].eclat, false);
+
+  lienA.oublier();
+  const voixPleine = lienA.attendre('voix', (m) => m.personnes && m.personnes.length === 2);
+  lienA.ws.send(JSON.stringify({ type: 'voix-rejoindre' }));
+  lienB.ws.send(JSON.stringify({ type: 'voix-rejoindre' }));
+  const voix = await voixPleine;
+  assert.equal(voix.personnes.length, 2);
+
+  const soi = await a.appel('/api/amis', { method: 'POST', body: { identifiant: inscritA.json.identifiant } });
+  assert.equal(soi.status, 400);
+  const inconnu = await a.appel('/api/amis', { method: 'POST', body: { identifiant: 'personne-absente' } });
+  assert.equal(inconnu.status, 404);
+  const ajout = await a.appel('/api/amis', { method: 'POST', body: { identifiant: inscritB.json.identifiant } });
+  assert.equal(ajout.status, 201);
+  assert.equal(ajout.json.nom, 'Camille');
+  const liste = await b.appel('/api/amis');
+  assert.equal(liste.json.some((ami) => ami.identifiant === inscritA.json.identifiant), true);
+  const ecoutePrive = lienB.attendre('prive');
+  const prive = await a.appel(`/api/amis/${inscritB.json.id}/messages`, { method: 'POST', body: { corps: 'Un mot pour toi.' } });
+  assert.equal(prive.status, 201);
+  assert.equal((await ecoutePrive).message.corps, 'Un mot pour toi.');
+  const lu = await b.appel(`/api/amis/${inscritA.json.id}/messages`);
+  assert.equal(lu.json[0].corps, 'Un mot pour toi.');
+  const etranger = await c.appel(`/api/amis/${inscritA.json.id}/messages`, { method: 'POST', body: { corps: 'Non.' } });
+  assert.equal(etranger.status, 403);
 
   lienA.ws.close();
   lienB.ws.close();

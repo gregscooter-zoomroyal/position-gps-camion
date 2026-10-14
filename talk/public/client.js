@@ -2,19 +2,22 @@ const etat = {
   moi: null,
   seuil: 'entrer',
   ecran: 'seuil',
+  groupes: [],
   cale: null,
   courantId: null,
   lignes: [],
   houle: [],
   presents: [],
-  mode: 'journal',
-  quaiOuvert: false,
+  personnesVoix: [],
+  enVoix: false,
   tient: false,
   assis: false,
   eclatId: null,
   fluxLocal: null,
+  fluxVoix: null,
   dessin: null,
   liens: new Map(),
+  liensVoix: new Map(),
   nombreAssis: 0,
   annonce: '',
   annonceErreur: false,
@@ -29,6 +32,11 @@ const etat = {
   imageRecue: false,
   lien: 'ferme',
   envoi: false,
+  envoiVoix: false,
+  membresOuverts: false,
+  amis: [],
+  amiId: null,
+  prives: [],
   ws: null,
   generationRoute: 0,
 };
@@ -36,7 +44,7 @@ const etat = {
 let generationLien = 0;
 let essaisLien = 0;
 
-const ROLES = { lampiste: 'Lampiste', veilleur: 'Veilleur', passant: 'Passant' };
+const ROLES = { lampiste: 'Propriétaire', veilleur: 'Modérateur', passant: 'Membre' };
 
 function el(tag, attrs = {}, children = []) {
   const node = document.createElement(tag);
@@ -56,9 +64,13 @@ function el(tag, attrs = {}, children = []) {
   return node;
 }
 
+function logo() {
+  return el('img', { class: 'logo', src: '/logo.png', alt: '' });
+}
+
 function marque(grande) {
   const wrap = el(grande ? 'h1' : 'span', { class: grande ? 'marque grande' : 'marque' });
-  wrap.append(document.getElementById('modele-lanterne').content.cloneNode(true));
+  wrap.append(logo());
   wrap.append(el('span', { class: 'marque-nom' }, 'Talk'));
   return wrap;
 }
@@ -76,23 +88,22 @@ function heure(ms) {
   return new Intl.DateTimeFormat('fr-FR', { hour: '2-digit', minute: '2-digit' }).format(ms);
 }
 
-function phraseQuai() {
+function phraseEnLigne() {
   const n = etat.presents.length;
-  if (n === 0) return 'Le quai';
-  if (n === 1) return '1 à quai';
-  return `${n} à quai`;
+  if (n === 0) return 'En ligne';
+  if (n === 1) return '1 en ligne';
+  return `${n} en ligne`;
 }
 
-function phraseAssis(n) {
-  if (!n) return 'Personne n’est assis';
-  if (n === 1) return '1 personne assise';
-  return `${n} personnes assises`;
+function phraseRegardent(n) {
+  if (!n) return 'Personne ne regarde';
+  if (n === 1) return '1 personne regarde';
+  return `${n} personnes regardent`;
 }
 
-function teinte(nom) {
-  let h = 0;
-  for (const ch of nom) h = (h + ch.charCodeAt(0) * 3) % 5;
-  return `teinte-${h}`;
+function initiale(nom) {
+  const lettre = (nom || '?').trim().charAt(0);
+  return lettre.toLocaleUpperCase('fr');
 }
 
 function presDuBas() {
@@ -138,6 +149,10 @@ function brancher() {
     if (etat.cale) envoyer({ type: 'entrer', caleId: etat.cale.id });
     if (etat.tient && etat.eclatId) envoyer({ type: 'tenir', eclatId: etat.eclatId });
     if (etat.assis && etat.eclatId) envoyer({ type: 'asseoir', eclatId: etat.eclatId });
+    if (etat.enVoix) {
+      for (const id of [...etat.liensVoix.keys()]) fermerLienVoix(id);
+      envoyer({ type: 'voix-rejoindre' });
+    }
   };
   ws.onmessage = (ev) => {
     if (gen !== generationLien) return;
@@ -163,7 +178,31 @@ function recevoir(msg) {
   if (msg.type === 'quai' && msg.caleId === etat.cale?.id) {
     etat.presents = msg.presents || [];
     peindreCompte();
-    if (etat.quaiOuvert) peindreQuai();
+    peindreTuiles();
+    if (etat.membresOuverts) peindreMembres();
+    return;
+  }
+  if (msg.type === 'voix' && msg.caleId === etat.cale?.id) {
+    etat.personnesVoix = msg.personnes || [];
+    peindreTuiles();
+    return;
+  }
+  if (msg.type === 'voix-deja' && msg.caleId === etat.cale?.id && etat.enVoix) {
+    for (const personne of msg.personnes || []) {
+      offrirVoix(personne.id).catch(() => annoncer('La voix ne se relie pas.', { erreur: true }));
+    }
+    return;
+  }
+  if (msg.type === 'voix-arrivee' && msg.caleId === etat.cale?.id) {
+    fermerLienVoix(msg.id);
+    return;
+  }
+  if (msg.type === 'voix-parti') {
+    fermerLienVoix(msg.id);
+    return;
+  }
+  if (msg.type === 'voix-signal' && etat.enVoix) {
+    recevoirSignalVoix(msg.de, msg.charge).catch(() => {});
     return;
   }
   if (msg.type === 'ligne') {
@@ -182,49 +221,57 @@ function recevoir(msg) {
     retirerHoule(msg.ligneId);
     return;
   }
+  if (msg.type === 'prive') {
+    ajouterPrive(msg.message);
+    return;
+  }
   if (msg.type === 'courant' && msg.caleId === etat.cale?.id) {
     if (!etat.cale.courants.some((c) => c.id === msg.courant.id)) etat.cale.courants.push(msg.courant);
-    peindreCourants();
+    peindreChoixConversation();
     return;
   }
   if (msg.type === 'membres' && msg.caleId === etat.cale?.id) {
     etat.cale.membres = msg.membres;
     const moi = msg.membres.find((m) => m.id === etat.moi.id);
     if (moi) etat.cale.role = moi.role;
-    peindreCourants();
-    peindreActions();
-    if (etat.quaiOuvert) peindreQuai();
+    peindreActionsGroupe();
+    peindreChoixConversation();
+    if (etat.membresOuverts) peindreMembres();
     return;
   }
   if (msg.type === 'eclat') {
-    if (etat.ecran === 'bassin') peindrePuce(msg.caleId, Boolean(msg.eclat));
+    const groupe = etat.groupes.find((g) => g.id === msg.caleId);
+    if (groupe) {
+      groupe.eclat = Boolean(msg.eclat);
+      peindreListeGroupes();
+    }
     if (etat.cale?.id !== msg.caleId) return;
     const avait = Boolean(etat.cale.eclat);
     etat.cale.eclat = msg.eclat;
     if (!msg.eclat) {
       if (!avait) return;
       couperFlux();
-      etat.mode = 'journal';
       etat.nombreAssis = 0;
-      annoncer('L’éclat s’est éteint.');
-      peindreScene();
-      peindreActions();
+      etat.houle = [];
+      annoncer('Le direct est terminé.');
+      peindreActionsGroupe();
+      peindreDirect();
       return;
     }
     etat.eclatId = msg.eclat.id;
     if (msg.eclat.auteurId === etat.moi.id && etat.fluxLocal) etat.tient = true;
-    peindreActions();
-    if (etat.mode === 'journal') peindreBande();
-    else peindreLegende();
+    peindreActionsGroupe();
+    peindreDirect();
     return;
   }
   if (msg.type === 'assis' && msg.eclatId === etat.cale?.eclat?.id) {
     etat.nombreAssis = msg.nombre || 0;
-    peindreCompte();
+    const compte = document.getElementById('compte-regardent');
+    if (compte) compte.textContent = phraseRegardent(etat.nombreAssis);
     return;
   }
   if (msg.type === 'spectateur' && etat.tient && msg.eclatId === etat.eclatId) {
-    offrir(msg.spectateurId).catch(() => annoncer('Le lien vers une personne assise a lâché.', { erreur: true }));
+    offrir(msg.spectateurId).catch(() => annoncer('Le lien vers une personne a lâché.', { erreur: true }));
     return;
   }
   if (msg.type === 'spectateur-parti') {
@@ -236,10 +283,11 @@ function recevoir(msg) {
     return;
   }
   if (msg.type === 'retire' && etat.cale?.id === msg.caleId) {
-    etat.avis = 'Vous avez été retiré de la cale.';
+    etat.avis = 'Vous avez été retiré du groupe.';
     couperFlux();
+    couperVoix();
     etat.cale = null;
-    aller('/bassin', { replace: true });
+    aller('/', { replace: true });
     return;
   }
   if (msg.type === 'erreur' && msg.message) annoncer(msg.message, { erreur: true });
@@ -256,87 +304,94 @@ async function router() {
   const path = location.pathname;
   if (!etat.moi) {
     if (path !== '/') history.replaceState({}, '', '/');
-    etat.ecran = 'seuil';
     monterSeuil();
     return;
   }
-  const match = path.match(/^\/cale\/([0-9a-f-]{36})$/i);
-  if (match) {
-    if (etat.cale?.id === match[1] && document.getElementById('scene')) return;
-    if (etat.cale && etat.cale.id !== match[1]) await quitterCale();
-    if (gen !== etat.generationRoute) return;
+  assurerCoquille();
+  try {
+    etat.groupes = await api('/api/bassin');
+  } catch (e) {
+    annoncer(e.message, { erreur: true });
+  }
+  if (gen !== etat.generationRoute) return;
+  peindreListeGroupes();
+  const groupe = path.match(/^\/groupe\/([0-9a-f-]{36})$/i);
+  const messages = path.match(/^\/messages(?:\/([0-9a-f-]{36}))?$/i);
+  if (groupe) {
     try {
-      await monterCaleDepuis(match[1]);
+      await ouvrirGroupe(groupe[1]);
     } catch (e) {
       if (gen !== etat.generationRoute) return;
       etat.avis = e.message;
-      etat.cale = null;
-      history.replaceState({}, '', '/bassin');
-      await monterBassin();
+      await quitterGroupe();
+      history.replaceState({}, '', '/');
+      peindreAccueil();
     }
     return;
   }
-  if (path === '/') history.replaceState({}, '', '/bassin');
-  if (etat.cale) await quitterCale();
+  await quitterGroupe();
   if (gen !== etat.generationRoute) return;
-  await monterBassin();
+  if (path === '/amis') {
+    await peindreAmis();
+    return;
+  }
+  if (messages) {
+    await peindreMessages(messages[1] || null);
+    return;
+  }
+  if (path !== '/') history.replaceState({}, '', '/');
+  peindreAccueil();
 }
 
-async function quitterCale() {
+async function quitterGroupe() {
+  if (!etat.cale && !etat.tient && !etat.enVoix) return;
   const eclatId = etat.tient ? etat.eclatId : null;
   const assis = etat.assis;
+  const enVoix = etat.enVoix;
   etat.tient = false;
   etat.assis = false;
   if (eclatId) {
-    try { await api(`/api/eclats/${eclatId}/eteindre`, { method: 'POST' }); } catch { /* déjà éteint */ }
+    try { await api(`/api/eclats/${eclatId}/eteindre`, { method: 'POST' }); } catch { /* déjà arrêté */ }
   }
   if (assis) envoyer({ type: 'quitter-eclat' });
-  envoyer({ type: 'sortir-cale' });
+  if (enVoix) envoyer({ type: 'voix-quitter' });
+  if (etat.cale) envoyer({ type: 'sortir-cale' });
   couperFlux();
+  couperVoix();
   etat.cale = null;
-  etat.mode = 'journal';
-  etat.quaiOuvert = false;
+  etat.presents = [];
+  etat.personnesVoix = [];
+  etat.lignes = [];
+  etat.houle = [];
+  etat.membresOuverts = false;
+  etat.nombreAssis = 0;
+  etat.confirmerExtinction = false;
 }
 
 function monterSeuil() {
   document.title = 'Talk';
   etat.ecran = 'seuil';
   const creer = etat.seuil === 'creer';
-  const racine = document.getElementById('ecran');
-  racine.replaceChildren(el('div', { class: 'seuil' }, [
-    el('section', { class: 'nuit' }, [
-      el('div', {}, [
-        el('p', { class: 'surtitre' }, 'Version 0.1'),
-        marque(true),
-        el('p', { class: 'promesse' }, 'On se retrouve là où la lumière tient.'),
+  document.getElementById('ecran').replaceChildren(el('div', { class: 'entree' }, [
+    el('form', { class: 'carte-forme', onsubmit: envoyerSeuil }, [
+      marque(true),
+      el('h2', {}, creer ? 'Créer un compte' : 'Connexion'),
+      el('p', { id: 'annonce', class: 'annonce', role: 'status' }),
+      creer ? el('label', { class: 'champ' }, [
+        el('span', { class: 'etiquette' }, 'Nom'),
+        el('input', { id: 'nom', name: 'nom', autocomplete: 'nickname', maxlength: '40', required: true }),
+      ]) : null,
+      el('label', { class: 'champ' }, [
+        el('span', { class: 'etiquette' }, 'Identifiant'),
+        el('input', { id: 'identifiant', name: 'identifiant', autocomplete: 'username', maxlength: '20', required: true }),
       ]),
-      el('dl', { class: 'lexique' }, [
-        ['Cale', 'Le bord où un groupe se tient.'],
-        ['Courant', 'Une conversation qui s’écrit, ligne après ligne.'],
-        ['Éclat', 'Une personne montre, les autres s’assoient.'],
-        ['Houle', 'Les mots dits pendant l’éclat, et pour cet éclat seulement.'],
-      ].map(([terme, sens]) => el('div', {}, [el('dt', {}, terme), el('dd', {}, sens)]))),
-    ]),
-    el('section', { class: 'panneau' }, [
-      el('form', { class: 'carte-forme', onsubmit: envoyerSeuil }, [
-        el('h2', {}, creer ? 'Créer un compte' : 'Entrer'),
-        el('p', { id: 'annonce', class: 'annonce', role: 'status' }),
-        creer ? el('label', { class: 'champ' }, [
-          el('span', { class: 'etiquette' }, 'Nom visible'),
-          el('input', { id: 'nom', name: 'nom', autocomplete: 'nickname', maxlength: '40', required: true }),
-        ]) : null,
-        el('label', { class: 'champ' }, [
-          el('span', { class: 'etiquette' }, 'Identifiant'),
-          el('input', { id: 'identifiant', name: 'identifiant', autocomplete: creer ? 'username' : 'username', maxlength: '20', required: true }),
-        ]),
-        el('label', { class: 'champ' }, [
-          el('span', { class: 'etiquette' }, 'Mot de passe'),
-          el('input', { id: 'mot-de-passe', name: 'mot-de-passe', type: 'password', autocomplete: creer ? 'new-password' : 'current-password', required: true }),
-        ]),
-        el('div', { class: 'actions-forme' }, [
-          el('button', { type: 'submit', class: 'plein', 'data-action': 'valider-seuil' }, creer ? 'Créer le compte' : 'Entrer'),
-          el('button', { type: 'button', class: 'texte', 'data-action': 'basculer', onclick: basculer }, creer ? 'Déjà un compte ? Entrer' : 'Pas encore de compte ? S’inscrire'),
-        ]),
+      el('label', { class: 'champ' }, [
+        el('span', { class: 'etiquette' }, 'Mot de passe'),
+        el('input', { id: 'mot-de-passe', name: 'mot-de-passe', type: 'password', autocomplete: creer ? 'new-password' : 'current-password', required: true }),
+      ]),
+      el('div', { class: 'actions-forme' }, [
+        el('button', { type: 'submit', class: 'plein', 'data-action': 'valider-seuil' }, creer ? 'Créer le compte' : 'Entrer'),
+        el('button', { type: 'button', class: 'texte', 'data-action': 'basculer', onclick: basculer }, creer ? 'J’ai déjà un compte' : 'Créer un compte'),
       ]),
     ]),
   ]));
@@ -363,117 +418,123 @@ async function envoyerSeuil(e) {
     });
     annoncer('');
     brancher();
-    await aller('/bassin', { replace: true });
+    await aller('/', { replace: true });
   } catch (err) {
     annoncer(err.message, { erreur: true });
   }
 }
 
-async function monterBassin() {
+function assurerCoquille() {
+  if (document.getElementById('rail')) return;
+  document.getElementById('ecran').replaceChildren(el('div', { class: 'coquille' }, [
+    el('aside', { id: 'rail', class: 'rail' }, [
+      el('button', { type: 'button', class: 'marque', 'data-action': 'accueil', onclick: () => aller('/') }, [
+        logo(),
+        el('span', { class: 'marque-nom' }, 'Talk'),
+      ]),
+      el('h2', {}, 'Mes groupes'),
+      el('div', { id: 'liste-groupes', class: 'liste-groupes' }),
+      el('form', { class: 'rail-forme', onsubmit: creerGroupe }, [
+        el('label', { class: 'champ' }, [
+          el('span', { class: 'etiquette' }, 'Nouveau groupe'),
+          el('input', { id: 'nom-cale', name: 'nom', maxlength: '48', required: true, placeholder: 'Nom du groupe' }),
+        ]),
+        el('label', { class: 'champ' }, [
+          el('span', { class: 'etiquette' }, 'En quelques mots'),
+          el('input', { id: 'resume-cale', name: 'resume', maxlength: '160' }),
+        ]),
+        el('button', { type: 'submit', class: 'plein', 'data-action': 'ouvrir-cale' }, 'Ouvrir'),
+      ]),
+      el('form', { class: 'rail-forme', onsubmit: rejoindreGroupe }, [
+        el('label', { class: 'champ' }, [
+          el('span', { class: 'etiquette' }, 'Code d’invitation'),
+          el('input', { id: 'amarre', name: 'amarre', maxlength: '12', autocomplete: 'off', required: true }),
+        ]),
+        el('button', { type: 'submit', class: 'plein', 'data-action': 'rejoindre' }, 'Rejoindre'),
+      ]),
+      el('div', { class: 'onglets' }, [
+        el('button', { type: 'button', class: 'onglet', 'data-action': 'messages', onclick: () => aller('/messages') }, 'Messages privés'),
+        el('button', { type: 'button', class: 'onglet', 'data-action': 'amis', onclick: () => aller('/amis') }, 'Amis'),
+      ]),
+      el('button', { type: 'button', class: 'texte', 'data-action': 'sortir', onclick: sortir }, 'Sortir'),
+      el('p', { class: 'qui' }, etat.moi.identifiant),
+    ]),
+    el('main', { id: 'principal', class: 'principal' }),
+  ]));
+}
+
+function peindreListeGroupes() {
+  const liste = document.getElementById('liste-groupes');
+  if (!liste) return;
+  if (!etat.groupes.length) {
+    liste.replaceChildren(el('p', { class: 'vide' }, 'Aucun groupe.'));
+    return;
+  }
+  liste.replaceChildren(...etat.groupes.map((groupe) => el('button', {
+    type: 'button',
+    class: 'bouton-groupe',
+    'data-groupe': groupe.id,
+    'aria-current': etat.cale?.id === groupe.id ? 'true' : 'false',
+    onclick: () => aller(`/groupe/${groupe.id}`),
+  }, [
+    el('span', { class: 'nom-groupe' }, groupe.nom),
+    groupe.eclat ? el('span', { class: 'sous-groupe' }, 'Direct') : null,
+  ])));
+}
+
+function peindreOnglets() {
+  const messages = document.querySelector('[data-action=messages]');
+  const amis = document.querySelector('[data-action=amis]');
+  if (messages) messages.setAttribute('aria-current', etat.ecran === 'messages' ? 'true' : 'false');
+  if (amis) amis.setAttribute('aria-current', etat.ecran === 'amis' ? 'true' : 'false');
+}
+
+function peindreAccueil() {
   document.title = 'Talk';
-  etat.ecran = 'bassin';
-  const cales = await api('/api/bassin');
+  etat.ecran = 'accueil';
   const avis = etat.avis;
   etat.avis = '';
-  const racine = document.getElementById('ecran');
-  racine.replaceChildren(
-    el('header', { class: 'entete' }, [
-      marque(false),
-      el('h1', {}, `Le bassin de ${etat.moi.nom}`),
-      el('div', { class: 'entete-actions' }, [
-        el('button', { type: 'button', class: 'texte', 'data-action': 'sortir', onclick: sortir }, 'Sortir'),
-      ]),
-    ]),
-    el('main', { class: 'bassin' }, [
-      el('div', { class: 'contenu' }, [
-        el('p', { id: 'annonce', class: 'annonce', role: 'status' }),
-        el('div', { class: 'bandes' }, [
-          el('form', { class: 'bande-papier', onsubmit: rejoindreCale }, [
-            el('h2', {}, 'J’ai une amarre'),
-            el('label', { class: 'champ' }, [
-              el('span', { class: 'etiquette' }, 'Code d’amarre'),
-              el('input', { id: 'amarre', name: 'amarre', maxlength: '12', autocomplete: 'off', required: true }),
-            ]),
-            el('button', { type: 'submit', class: 'plein', 'data-action': 'rejoindre' }, 'Rejoindre'),
-          ]),
-          el('form', { class: 'bande-papier', onsubmit: ouvrirCale }, [
-            el('h2', {}, 'Ouvrir une cale'),
-            el('label', { class: 'champ' }, [
-              el('span', { class: 'etiquette' }, 'Nom de la cale'),
-              el('input', { id: 'nom-cale', name: 'nom', maxlength: '48', required: true, placeholder: 'Les pins du soir' }),
-            ]),
-            el('label', { class: 'champ' }, [
-              el('span', { class: 'etiquette' }, 'En quelques mots'),
-              el('input', { id: 'resume-cale', name: 'resume', maxlength: '160' }),
-            ]),
-            el('button', { type: 'submit', class: 'plein', 'data-action': 'ouvrir-cale' }, 'Ouvrir'),
-          ]),
-        ]),
-        cales.length ? el('div', { class: 'grille' }, cales.map(carteCale)) : el('p', { class: 'vide' }, 'Aucune cale. Ouvrez-en une, ou entrez un code d’amarre.'),
-      ]),
-    ]),
-  );
-  if (avis) annoncer(avis, { erreur: true });
+  document.getElementById('principal').replaceChildren(el('div', { class: 'page' }, [
+    el('h1', {}, 'Choisissez un groupe'),
+    el('p', {}, 'Retrouvez les groupes que vous avez ouverts ou rejoints. Les messages privés et les amis sont dans la colonne de gauche.'),
+    el('p', { id: 'annonce', class: `annonce${avis ? ' erreur' : ''}`, role: 'status' }, avis),
+  ]));
+  peindreOnglets();
+  peindreListeGroupes();
 }
 
-function carteCale(cale) {
-  return el('a', {
-    class: 'carte-cale',
-    href: `/cale/${cale.id}`,
-    onclick: (e) => { e.preventDefault(); aller(`/cale/${cale.id}`); },
-  }, [
-    el('span', { class: `tranche ${teinte(cale.nom)}` }),
-    el('span', { class: 'carte-corps' }, [
-      el('span', { class: 'carte-nom' }, cale.nom),
-      el('span', { class: 'resume' }, cale.resume || 'Sans description'),
-      el('span', { class: 'carte-meta' }, [
-        el('span', {}, cale.membres > 1 ? `${cale.membres} amarrés` : '1 amarré'),
-        el('span', { class: 'role-etiquette' }, ROLES[cale.role] || cale.role),
-        el('span', { class: 'puce-eclat', 'data-cale': cale.id, hidden: !cale.eclat }, cale.eclat ? 'Éclat allumé' : ''),
-      ]),
-    ]),
-  ]);
-}
-
-function peindrePuce(caleId, allume) {
-  const puce = document.querySelector(`.puce-eclat[data-cale="${caleId}"]`);
-  if (!puce) return;
-  puce.hidden = !allume;
-  puce.textContent = allume ? 'Éclat allumé' : '';
-}
-
-async function rejoindreCale(e) {
-  e.preventDefault();
-  try {
-    const cale = await api('/api/amarres', { method: 'POST', body: { amarre: document.getElementById('amarre').value } });
-    await aller(`/cale/${cale.id}`);
-  } catch (err) {
-    annoncer(err.message, { erreur: true });
-  }
-}
-
-async function ouvrirCale(e) {
+async function creerGroupe(e) {
   e.preventDefault();
   try {
     const cale = await api('/api/cales', {
       method: 'POST',
       body: { nom: document.getElementById('nom-cale').value, resume: document.getElementById('resume-cale').value },
     });
-    await aller(`/cale/${cale.id}`);
+    document.getElementById('nom-cale').value = '';
+    document.getElementById('resume-cale').value = '';
+    await aller(`/groupe/${cale.id}`);
+  } catch (err) {
+    annoncer(err.message, { erreur: true });
+  }
+}
+
+async function rejoindreGroupe(e) {
+  e.preventDefault();
+  try {
+    const cale = await api('/api/amarres', { method: 'POST', body: { amarre: document.getElementById('amarre').value } });
+    document.getElementById('amarre').value = '';
+    await aller(`/groupe/${cale.id}`);
   } catch (err) {
     annoncer(err.message, { erreur: true });
   }
 }
 
 async function sortir() {
-  const eclatId = etat.tient ? etat.eclatId : null;
-  if (eclatId) {
-    try { await api(`/api/eclats/${eclatId}/eteindre`, { method: 'POST' }); } catch { /* déjà éteint */ }
-  }
-  couperFlux();
-  etat.cale = null;
+  await quitterGroupe();
   try { await api('/api/sortie', { method: 'POST' }); } catch { /* session déjà close */ }
   etat.moi = null;
+  etat.groupes = [];
+  etat.amis = [];
   generationLien += 1;
   try { etat.ws?.close(); } catch { /* déjà fermé */ }
   etat.ws = null;
@@ -481,14 +542,23 @@ async function sortir() {
   monterSeuil();
 }
 
-async function monterCaleDepuis(id) {
+async function ouvrirGroupe(id) {
+  if (etat.cale?.id === id && document.getElementById('tuiles')) {
+    etat.ecran = 'groupe';
+    peindreOnglets();
+    peindreListeGroupes();
+    return;
+  }
+  if (etat.cale && etat.cale.id !== id) await quitterGroupe();
   const cale = await api(`/api/cales/${id}`);
   etat.cale = cale;
-  etat.ecran = 'cale';
+  etat.ecran = 'groupe';
   etat.courantId = cale.courants[0]?.id || null;
   etat.lignes = [];
   etat.houle = [];
-  etat.quaiOuvert = false;
+  etat.presents = [];
+  etat.personnesVoix = [];
+  etat.membresOuverts = false;
   etat.assis = false;
   etat.nombreAssis = 0;
   etat.confirmation = null;
@@ -496,51 +566,69 @@ async function monterCaleDepuis(id) {
   etat.confirmationRetrait = null;
   etat.confirmerExtinction = false;
   etat.imageRecue = false;
-  if (etat.fluxLocal && cale.eclat && cale.eclat.auteurId === etat.moi.id) {
+  if (!(etat.fluxLocal && cale.eclat && cale.eclat.auteurId === etat.moi.id)) {
+    etat.tient = false;
+  } else {
     etat.tient = true;
     etat.eclatId = cale.eclat.id;
-    etat.mode = 'horizon';
-  } else if (!etat.fluxLocal) {
-    etat.tient = false;
-    etat.mode = 'journal';
   }
-  monterCale();
-  if (etat.courantId && etat.mode === 'journal') await chargerCourant(etat.courantId);
-  if (etat.mode === 'horizon' && cale.eclat) {
+  document.title = `${cale.nom} · Talk`;
+  peindreGroupe();
+  if (etat.courantId) {
+    etat.lignes = await api(`/api/courants/${etat.courantId}/lignes`);
+    peindreLignes();
+  }
+  if (cale.eclat) {
     try { etat.houle = await api(`/api/eclats/${cale.eclat.id}/houle`); } catch { etat.houle = []; }
-    peindreHoule();
-    attacherLocal();
+    peindreDiscussion();
   }
   envoyer({ type: 'entrer', caleId: id });
   if (etat.tient && etat.eclatId) envoyer({ type: 'tenir', eclatId: etat.eclatId });
+  peindreListeGroupes();
+  peindreOnglets();
 }
 
-function monterCale() {
-  document.title = `${etat.cale.nom} · Talk`;
-  const racine = document.getElementById('ecran');
-  racine.replaceChildren(
-    el('header', { class: 'mat' }, [
-      el('a', { href: '/bassin', onclick: (e) => { e.preventDefault(); aller('/bassin'); } }, 'Bassin'),
-      el('div', { class: 'mat-titre' }, [
-        el('h1', {}, etat.cale.nom),
-        etat.cale.resume ? el('p', { class: 'resume-cale' }, etat.cale.resume) : null,
-        el('p', { class: 'ligne-amarre' }, [
-          'Amarre ',
-          el('strong', { class: 'amarre', id: 'code-amarre' }, etat.cale.amarre),
+function peindreGroupe() {
+  const cale = etat.cale;
+  document.getElementById('principal').replaceChildren(el('div', { class: 'groupe' }, [
+    el('header', { class: 'groupe-entete' }, [
+      el('div', {}, [
+        el('h1', {}, cale.nom),
+        cale.resume ? el('p', { class: 'resume' }, cale.resume) : null,
+        el('p', { class: 'meta' }, [
+          'Code d’invitation ',
+          el('strong', { class: 'code', id: 'code-amarre' }, cale.amarre),
           ' ',
-          el('button', { type: 'button', class: 'texte', onclick: copierAmarre }, 'Copier'),
+          el('button', { type: 'button', class: 'texte', onclick: copierCode }, 'Copier'),
         ]),
+        el('p', { id: 'compte-en-ligne', class: 'meta' }, phraseEnLigne()),
         el('p', { id: 'etat-lien', class: 'etat-lien', hidden: true }),
       ]),
-      el('div', { id: 'actions-mat', class: 'mat-actions' }),
+      el('div', { id: 'actions-groupe', class: 'actions' }),
     ]),
-    el('main', { id: 'scene', class: 'scene' }),
-    el('section', { id: 'quai', class: 'quai', hidden: true }),
-  );
-  peindreActions();
-  peindreScene();
+    el('section', { class: 'appel', 'aria-label': 'Appel' }, [
+      el('h2', {}, 'Appel'),
+      el('div', { id: 'tuiles', class: 'tuiles' }),
+      el('div', { id: 'actions-voix', class: 'actions' }),
+    ]),
+    el('section', { id: 'zone-direct' }),
+    el('section', { class: 'conversation' }, [
+      el('h2', {}, 'Conversation'),
+      el('div', { id: 'choix-conversation', class: 'choix-conversation' }),
+      el('p', { id: 'annonce', class: `annonce${etat.annonceErreur ? ' erreur' : ''}`, role: 'status' }, etat.annonce),
+      el('div', { id: 'journal', class: 'journal' }),
+      formeMessage('corps', 'Message', 'poser', poserLigne, 'Envoyer'),
+    ]),
+    el('section', { id: 'membres', class: 'feuille', hidden: true }),
+  ]));
+  peindreActionsGroupe();
+  peindreTuiles();
+  peindreVoixActions();
+  peindreDirect();
+  peindreChoixConversation();
+  peindreLignes();
+  peindreMembres();
   peindreLien();
-  peindreQuai();
 }
 
 function peindreLien() {
@@ -548,88 +636,141 @@ function peindreLien() {
   if (!zone) return;
   const coupe = etat.lien === 'coupe';
   zone.hidden = !coupe;
-  zone.textContent = coupe ? 'Lien coupé — Talk renoue…' : '';
+  zone.textContent = coupe ? 'Connexion coupée. Talk réessaie…' : '';
 }
 
 function peindreCompte() {
-  const bouton = document.getElementById('compte-quai');
-  if (bouton) bouton.textContent = phraseQuai();
-  const assis = document.getElementById('compte-assis');
-  if (assis) assis.textContent = phraseAssis(etat.nombreAssis);
+  const compte = document.getElementById('compte-en-ligne');
+  if (compte) compte.textContent = phraseEnLigne();
 }
 
-function peindreActions() {
-  const zone = document.getElementById('actions-mat');
+function peindreActionsGroupe() {
+  const zone = document.getElementById('actions-groupe');
   if (!zone || !etat.cale) return;
   const boutons = [
-    el('button', { type: 'button', class: 'texte', id: 'compte-quai', onclick: ouvrirQuai }, phraseQuai()),
+    el('button', { type: 'button', class: 'texte', 'data-action': 'membres', onclick: ouvrirMembres }, 'Membres'),
   ];
   const eclat = etat.cale.eclat;
   if (!eclat) {
-    boutons.push(el('button', { type: 'button', class: 'plein', 'data-action': 'allumer', onclick: () => allumer(false) }, 'Allumer l’éclat'));
+    boutons.push(el('button', { type: 'button', class: 'plein', 'data-action': 'allumer', onclick: () => lancerDirect(false) }, 'Lancer le direct'));
     if (etat.lentilleRefusee) {
-      boutons.push(el('button', { type: 'button', class: 'texte', 'data-action': 'sans-lentille', onclick: () => allumer(true) }, 'Sans lentille'));
+      boutons.push(el('button', { type: 'button', class: 'texte', 'data-action': 'sans-lentille', onclick: () => lancerDirect(true) }, 'Sans caméra'));
     }
   } else if (eclat.auteurId === etat.moi.id && !etat.tient) {
-    boutons.push(el('button', { type: 'button', class: 'plein', 'data-action': 'reprendre', onclick: () => reprendre(false) }, 'Reprendre l’éclat'));
+    boutons.push(el('button', { type: 'button', class: 'plein', 'data-action': 'reprendre', onclick: () => reprendre(false) }, 'Reprendre le direct'));
     if (etat.lentilleRefusee) {
-      boutons.push(el('button', { type: 'button', class: 'texte', 'data-action': 'reprendre-sans', onclick: () => reprendre(true) }, 'Reprendre sans lentille'));
+      boutons.push(el('button', { type: 'button', class: 'texte', 'data-action': 'reprendre-sans', onclick: () => reprendre(true) }, 'Sans caméra'));
     }
-    boutons.push(boutonEteindre());
+    boutons.push(boutonArreter());
   } else if (eclat.auteurId === etat.moi.id || etat.cale.role !== 'passant') {
-    boutons.push(boutonEteindre());
+    boutons.push(boutonArreter());
   }
-  boutons.push(el('button', { type: 'button', class: 'texte', 'data-action': 'sortir', onclick: sortir }, 'Sortir'));
   zone.replaceChildren(...boutons);
 }
 
-function boutonEteindre() {
+function boutonArreter() {
   return el('button', {
     type: 'button',
     class: 'plein',
     'data-action': 'eteindre',
-    onclick: demanderEteindre,
-  }, etat.confirmerExtinction ? 'Confirmer l’extinction' : 'Éteindre');
+    onclick: demanderArreter,
+  }, etat.confirmerExtinction ? 'Confirmer' : 'Arrêter le direct');
 }
 
-function peindreScene() {
-  const scene = document.getElementById('scene');
-  if (!scene) return;
-  if (etat.mode === 'horizon') {
+function peindreTuiles() {
+  const zone = document.getElementById('tuiles');
+  if (!zone) return;
+  if (!etat.presents.length) {
+    zone.replaceChildren(el('p', { class: 'vide' }, 'Personne en ligne.'));
+    return;
+  }
+  const enAppel = new Set(etat.personnesVoix.map((p) => p.id));
+  zone.replaceChildren(...etat.presents.map((personne) => {
+    const dedans = enAppel.has(personne.id);
+    return el('div', { class: dedans ? 'tuile dans-appel' : 'tuile', 'data-personne': personne.id }, [
+      el('div', { class: 'rond' }, initiale(personne.nom)),
+      el('strong', {}, personne.nom),
+      el('span', {}, dedans ? 'Dans l’appel' : 'En ligne'),
+    ]);
+  }));
+}
+
+function peindreVoixActions() {
+  const zone = document.getElementById('actions-voix');
+  if (!zone) return;
+  if (etat.enVoix) {
+    zone.replaceChildren(el('button', {
+      type: 'button',
+      class: 'plein',
+      'data-action': 'quitter-voix',
+      onclick: quitterVoixUtilisateur,
+    }, 'Quitter la voix'));
+    return;
+  }
+  zone.replaceChildren(el('button', {
+    type: 'button',
+    class: 'plein',
+    'data-action': 'rejoindre-voix',
+    onclick: rejoindreVoixUtilisateur,
+  }, 'Rejoindre la voix'));
+}
+
+function peindreDirect() {
+  const zone = document.getElementById('zone-direct');
+  if (!zone || !etat.cale) return;
+  const eclat = etat.cale.eclat;
+  if (!eclat) {
+    zone.replaceChildren();
+    return;
+  }
+  const morceaux = [el('h2', {}, 'Direct')];
+  if (etat.tient || etat.assis) {
     const video = el('video', { id: 'flux' });
     video.autoplay = true;
     video.playsInline = true;
     video.muted = Boolean(etat.tient);
-    scene.replaceChildren(
-      el('section', { class: 'horizon' }, [
-        video,
-        el('div', { class: 'horizon-legende', id: 'legende' }),
-      ]),
-      el('div', { class: 'colonne' }, [
-        el('p', { id: 'annonce', class: `annonce${etat.annonceErreur ? ' erreur' : ''}`, role: 'status' }, etat.annonce),
-        el('h2', {}, 'Houle'),
-        el('div', { id: 'houle', class: 'journal' }),
-        formeMessage('corps-houle', 'Dire dans la houle', 'poser-houle', poserHoule),
-      ]),
+    morceaux.push(video, el('div', { id: 'legende', class: 'legende' }));
+  } else if (eclat.auteurId !== etat.moi.id) {
+    morceaux.push(
+      el('p', {}, `${eclat.auteurNom} a lancé un direct.`),
+      el('button', { type: 'button', class: 'plein', 'data-action': 'regarder', onclick: regarder }, 'Regarder'),
     );
-    peindreLegende();
-    peindreHoule();
-    if (etat.tient) attacherLocal();
-    return;
+  } else {
+    morceaux.push(el('p', {}, 'Votre direct est lancé.'));
   }
-  scene.replaceChildren(el('div', { class: 'colonne' }, [
-    el('nav', { id: 'nav-courants', class: 'courants', 'aria-label': 'Courants' }),
-    el('div', { id: 'bande' }),
-    el('p', { id: 'annonce', class: `annonce${etat.annonceErreur ? ' erreur' : ''}`, role: 'status' }, etat.annonce),
-    el('div', { id: 'journal', class: 'journal' }),
-    formeMessage('corps', 'Écrire dans ce courant', 'poser', poserLigne),
-  ]));
-  peindreCourants();
-  peindreBande();
-  peindreLignes();
+  morceaux.push(
+    el('h3', {}, 'Discussion du direct'),
+    el('div', { id: 'discussion', class: 'journal' }),
+    formeMessage('corps-direct', 'Message', 'poser-direct', poserHoule, 'Envoyer'),
+  );
+  zone.replaceChildren(el('div', { class: 'direct' }, morceaux));
+  peindreLegende();
+  peindreDiscussion();
+  if (etat.tient) attacherLocal();
 }
 
-function formeMessage(id, etiquette, action, onSubmit) {
+function peindreLegende() {
+  const legende = document.getElementById('legende');
+  if (!legende || !etat.cale?.eclat) return;
+  const eclat = etat.cale.eclat;
+  const morceaux = [];
+  if (etat.tient) {
+    morceaux.push(el('p', {}, [
+      'Vous êtes en direct. ',
+      el('span', { id: 'compte-regardent' }, phraseRegardent(etat.nombreAssis)),
+    ]));
+    if (etat.fluxLocal?.getAudioTracks().length) {
+      morceaux.push(el('button', { type: 'button', class: 'texte', onclick: couvrirSon }, etat.sonCouvert ? 'Rendre le micro' : 'Couper le micro'));
+    }
+  } else if (etat.assis) {
+    const etatImage = etat.imageRecue ? 'Image reçue' : 'Connexion en cours…';
+    morceaux.push(el('p', {}, `${eclat.auteurNom} est en direct. ${etatImage}`));
+    if (etat.sonBloque) morceaux.push(el('button', { type: 'button', class: 'texte', onclick: activerSon }, 'Activer le son'));
+  }
+  legende.replaceChildren(...morceaux);
+}
+
+function formeMessage(id, etiquette, action, onSubmit, libelle) {
   return el('form', { class: 'composeur', onsubmit: onSubmit }, [
     el('label', { class: 'champ' }, [
       el('span', { class: 'etiquette' }, etiquette),
@@ -645,133 +786,69 @@ function formeMessage(id, etiquette, action, onSubmit) {
         },
       }),
     ]),
-    el('button', { type: 'submit', class: 'plein', 'data-action': action }, id === 'corps' ? 'Poser la ligne' : 'Lancer'),
+    el('button', { type: 'submit', class: 'plein', 'data-action': action }, libelle),
   ]);
 }
 
-function peindreCourants() {
-  const nav = document.getElementById('nav-courants');
-  if (!nav || !etat.cale) return;
-  const boutons = etat.cale.courants.map((courant) => el('button', {
+function peindreChoixConversation() {
+  const zone = document.getElementById('choix-conversation');
+  if (!zone || !etat.cale) return;
+  if (etat.cale.courants.length < 2) {
+    zone.replaceChildren();
+    return;
+  }
+  zone.replaceChildren(...etat.cale.courants.map((courant) => el('button', {
     type: 'button',
-    class: 'courant',
+    class: 'choix',
     'aria-current': courant.id === etat.courantId ? 'true' : 'false',
-    onclick: () => chargerCourant(courant.id),
-  }, courant.nom));
-  if (etat.cale.role !== 'passant') {
-    boutons.push(el('form', { class: 'forme-courant', onsubmit: ajouterCourant }, [
-      el('input', { id: 'nom-courant', maxlength: '32', placeholder: 'Nouveau courant', 'aria-label': 'Nom du courant' }),
-      el('button', { type: 'submit', class: 'texte' }, 'Ajouter'),
-    ]));
-  }
-  nav.replaceChildren(...boutons);
-}
-
-function peindreBande() {
-  const bande = document.getElementById('bande');
-  if (!bande || !etat.cale) return;
-  bande.replaceChildren();
-  const eclat = etat.cale.eclat;
-  if (!eclat) return;
-  if (eclat.auteurId === etat.moi.id && etat.tient) {
-    bande.append(el('div', { class: 'bande' }, [
-      el('p', {}, `Vous tenez l’éclat. ${phraseAssis(etat.nombreAssis)}`),
-      el('button', { type: 'button', class: 'plein', onclick: ouvrirHorizon }, 'Revenir à l’image'),
-    ]));
-    return;
-  }
-  if (eclat.auteurId === etat.moi.id) {
-    bande.append(el('div', { class: 'bande' }, [
-      el('p', {}, 'L’éclat est encore à votre nom.'),
-      el('button', { type: 'button', class: 'plein', 'data-action': 'reprendre', onclick: () => reprendre(false) }, 'Reprendre l’éclat'),
-    ]));
-    return;
-  }
-  bande.append(el('div', { class: 'bande' }, [
-    el('p', {}, `${eclat.auteurNom} tient l’éclat. ${phraseAssis(etat.nombreAssis)}`),
-    el('button', { type: 'button', class: 'plein', 'data-action': 'asseoir', onclick: asseoir }, 'S’asseoir'),
-  ]));
-}
-
-function peindreLegende() {
-  const legende = document.getElementById('legende');
-  if (!legende || !etat.cale?.eclat) return;
-  const eclat = etat.cale.eclat;
-  const morceaux = [];
-  if (etat.tient) {
-    morceaux.push(el('p', {}, [
-      'Vous tenez l’éclat. ',
-      el('span', { id: 'compte-assis' }, phraseAssis(etat.nombreAssis)),
-    ]));
-    if (etat.fluxLocal?.getAudioTracks().length) {
-      morceaux.push(el('button', { type: 'button', class: 'texte', onclick: couvrirSon }, etat.sonCouvert ? 'Rendre le son' : 'Couvrir le son'));
-    }
-  } else {
-    const etatImage = etat.imageRecue ? 'Image reçue' : 'On relie l’image…';
-    morceaux.push(el('p', {}, `${eclat.auteurNom} tient l’éclat — ${etatImage}. `));
-    if (etat.sonBloque) morceaux.push(el('button', { type: 'button', class: 'texte', onclick: activerSon }, 'Activer le son'));
-  }
-  morceaux.push(el('button', { type: 'button', class: 'texte', 'data-action': 'journal', onclick: retourJournal }, 'Retourner aux courants'));
-  legende.replaceChildren(...morceaux);
+    onclick: () => chargerConversation(courant.id),
+  }, courant.nom)));
 }
 
 function peindreLignes() {
   const journal = document.getElementById('journal');
   if (!journal) return;
   if (!etat.lignes.length) {
-    journal.replaceChildren(el('p', { class: 'vide' }, 'Aucune ligne dans ce courant.'));
+    journal.replaceChildren(el('p', { class: 'vide' }, 'Aucun message.'));
     return;
   }
   journal.replaceChildren(...etat.lignes.map((ligne) => ligneJournal(ligne, {
     confirmer: etat.confirmation === ligne.id,
-    action: () => demanderRayer(ligne),
+    action: () => demanderSupprimer(ligne),
   })));
 }
 
-function peindreHoule() {
-  const zone = document.getElementById('houle');
+function peindreDiscussion() {
+  const zone = document.getElementById('discussion');
   if (!zone) return;
   if (!etat.houle.length) {
-    zone.replaceChildren(el('p', { class: 'vide' }, 'La houle est encore calme.'));
+    zone.replaceChildren(el('p', { class: 'vide' }, 'Aucun message.'));
     return;
   }
   zone.replaceChildren(...etat.houle.map((ligne) => ligneJournal(ligne, {
     confirmer: etat.confirmationHoule === ligne.id,
-    action: () => demanderRayerHoule(ligne),
+    action: () => demanderSupprimerHoule(ligne),
   })));
 }
 
 function ligneJournal(ligne, { confirmer, action }) {
-  const peut = ligne.auteurId === etat.moi.id || etat.cale.role === 'lampiste' || etat.cale.role === 'veilleur';
+  const peut = ligne.auteurId === etat.moi.id || etat.cale?.role === 'lampiste' || etat.cale?.role === 'veilleur';
   return el('article', { class: 'ligne-journal' }, [
     el('time', { class: 'heure', datetime: new Date(ligne.creeLe).toISOString() }, heure(ligne.creeLe)),
     el('div', {}, [
       el('div', { class: 'auteur' }, ligne.auteurNom),
       el('p', { class: 'corps' }, ligne.corps),
-      peut ? el('button', { type: 'button', class: 'texte', 'data-action': 'rayer', onclick: action }, confirmer ? 'Confirmer' : 'Rayer') : null,
+      peut ? el('button', { type: 'button', class: 'texte', 'data-action': 'supprimer', onclick: action }, confirmer ? 'Confirmer' : 'Supprimer') : null,
     ]),
   ]);
 }
 
-async function chargerCourant(id) {
+async function chargerConversation(id) {
   etat.courantId = id;
   etat.confirmation = null;
   etat.lignes = await api(`/api/courants/${id}/lignes`);
-  peindreCourants();
+  peindreChoixConversation();
   peindreLignes();
-  window.scrollTo(0, document.body.scrollHeight);
-}
-
-async function ajouterCourant(e) {
-  e.preventDefault();
-  const champ = document.getElementById('nom-courant');
-  try {
-    const courant = await api(`/api/cales/${etat.cale.id}/courants`, { method: 'POST', body: { nom: champ.value } });
-    if (!etat.cale.courants.some((c) => c.id === courant.id)) etat.cale.courants.push(courant);
-    await chargerCourant(courant.id);
-  } catch (err) {
-    annoncer(err.message, { erreur: true });
-  }
 }
 
 function ajouterLigne(ligne) {
@@ -789,13 +866,9 @@ function ajouterLigne(ligne) {
 function ajouterHoule(ligne) {
   if (!ligne || etat.houle.some((l) => l.id === ligne.id)) return;
   if (ligne.eclatId !== etat.cale?.eclat?.id && ligne.eclatId !== etat.eclatId) return;
-  const suivre = presDuBas();
   etat.houle.push(ligne);
   etat.houle.sort((a, b) => a.creeLe - b.creeLe);
-  if (document.getElementById('houle')) {
-    peindreHoule();
-    if (suivre) window.scrollTo(0, document.body.scrollHeight);
-  }
+  if (document.getElementById('discussion')) peindreDiscussion();
 }
 
 function retirerLigne(id) {
@@ -807,20 +880,19 @@ function retirerLigne(id) {
 function retirerHoule(id) {
   etat.houle = etat.houle.filter((l) => l.id !== id);
   if (etat.confirmationHoule === id) etat.confirmationHoule = null;
-  if (document.getElementById('houle')) peindreHoule();
+  if (document.getElementById('discussion')) peindreDiscussion();
 }
 
 async function poserLigne(e) {
   e.preventDefault();
   const champ = document.getElementById('corps');
   const corps = champ.value;
-  if (!corps.trim()) return;
+  if (!corps.trim() || !etat.courantId) return;
   champ.disabled = true;
   try {
     const ligne = await api(`/api/courants/${etat.courantId}/lignes`, { method: 'POST', body: { corps } });
     champ.value = '';
     ajouterLigne(ligne);
-    window.scrollTo(0, document.body.scrollHeight);
   } catch (err) {
     annoncer(err.message, { erreur: true });
   } finally {
@@ -831,7 +903,7 @@ async function poserLigne(e) {
 
 async function poserHoule(e) {
   e.preventDefault();
-  const champ = document.getElementById('corps-houle');
+  const champ = document.getElementById('corps-direct');
   const eclatId = etat.cale?.eclat?.id;
   if (!eclatId || !champ) return;
   const corps = champ.value;
@@ -841,7 +913,6 @@ async function poserHoule(e) {
     const ligne = await api(`/api/eclats/${eclatId}/houle`, { method: 'POST', body: { corps } });
     champ.value = '';
     ajouterHoule(ligne);
-    window.scrollTo(0, document.body.scrollHeight);
   } catch (err) {
     annoncer(err.message, { erreur: true });
   } finally {
@@ -850,7 +921,7 @@ async function poserHoule(e) {
   }
 }
 
-async function demanderRayer(ligne) {
+async function demanderSupprimer(ligne) {
   if (etat.confirmation !== ligne.id) {
     etat.confirmation = ligne.id;
     peindreLignes();
@@ -865,10 +936,10 @@ async function demanderRayer(ligne) {
   }
 }
 
-async function demanderRayerHoule(ligne) {
+async function demanderSupprimerHoule(ligne) {
   if (etat.confirmationHoule !== ligne.id) {
     etat.confirmationHoule = ligne.id;
-    peindreHoule();
+    peindreDiscussion();
     return;
   }
   etat.confirmationHoule = null;
@@ -880,37 +951,36 @@ async function demanderRayerHoule(ligne) {
   }
 }
 
-function ouvrirQuai() {
-  etat.quaiOuvert = !etat.quaiOuvert;
-  peindreQuai();
+function ouvrirMembres() {
+  etat.membresOuverts = !etat.membresOuverts;
+  peindreMembres();
 }
 
-function peindreQuai() {
-  const quai = document.getElementById('quai');
-  if (!quai || !etat.cale) return;
-  if (!etat.quaiOuvert) {
-    quai.hidden = true;
-    quai.replaceChildren();
+function peindreMembres() {
+  const zone = document.getElementById('membres');
+  if (!zone || !etat.cale) return;
+  if (!etat.membresOuverts) {
+    zone.hidden = true;
+    zone.replaceChildren();
     return;
   }
-  quai.hidden = false;
   const presents = new Set(etat.presents.map((p) => p.id));
-  quai.replaceChildren(
-    el('div', { class: 'quai-entete' }, [
-      el('h2', {}, 'Le quai'),
-      el('button', { type: 'button', class: 'texte', 'data-action': 'fermer-quai', onclick: ouvrirQuai }, 'Fermer'),
+  zone.hidden = false;
+  zone.replaceChildren(
+    el('div', { class: 'feuille-entete' }, [
+      el('h2', {}, 'Membres'),
+      el('button', { type: 'button', class: 'texte', 'data-action': 'fermer-membres', onclick: ouvrirMembres }, 'Fermer'),
     ]),
     el('ul', {}, etat.cale.membres.map((membre) => el('li', { class: 'membre', 'data-membre': membre.id }, [
-      el('span', { class: presents.has(membre.id) ? 'diamant quai-la' : 'diamant', title: presents.has(membre.id) ? 'À quai' : 'Au large' }),
+      el('span', { class: presents.has(membre.id) ? 'diamant la' : 'diamant', title: presents.has(membre.id) ? 'En ligne' : 'Absent' }),
       el('div', {}, [
         el('strong', {}, membre.nom),
         el('span', { class: 'identifiant' }, membre.identifiant),
-        el('span', { class: 'role-etiquette' }, ROLES[membre.role] || membre.role),
+        el('span', { class: 'role-etiquette' }, ROLES[membre.role] || 'Membre'),
       ]),
       el('div', { class: 'membre-actions' }, actionsMembre(membre)),
     ]))),
   );
-  document.querySelector('[data-action=fermer-quai]')?.focus();
 }
 
 function actionsMembre(membre) {
@@ -920,18 +990,17 @@ function actionsMembre(membre) {
       'aria-label': `Rôle de ${membre.nom}`,
       onchange: (e) => changerRole(membre.id, e.target.value),
     }, [
-      el('option', { value: 'passant', selected: membre.role === 'passant' }, 'Passant'),
-      el('option', { value: 'veilleur', selected: membre.role === 'veilleur' }, 'Veilleur'),
+      el('option', { value: 'passant', selected: membre.role === 'passant' }, 'Membre'),
+      el('option', { value: 'veilleur', selected: membre.role === 'veilleur' }, 'Modérateur'),
     ]));
   }
   if (peutRetirer(membre)) {
-    const confirmer = etat.confirmationRetrait === membre.id;
     actions.push(el('button', {
       type: 'button',
       class: 'texte',
       'data-action': 'retirer',
       onclick: () => retirerMembre(membre.id),
-    }, confirmer ? 'Confirmer' : 'Retirer'));
+    }, etat.confirmationRetrait === membre.id ? 'Confirmer' : 'Retirer'));
   }
   return actions;
 }
@@ -948,44 +1017,45 @@ async function changerRole(userId, role) {
     etat.cale.membres = membres;
     const moi = membres.find((m) => m.id === etat.moi.id);
     if (moi) etat.cale.role = moi.role;
-    peindreQuai();
-    peindreCourants();
+    peindreMembres();
+    peindreChoixConversation();
+    peindreActionsGroupe();
   } catch (err) {
     annoncer(err.message, { erreur: true });
-    peindreQuai();
+    peindreMembres();
   }
 }
 
 async function retirerMembre(userId) {
   if (etat.confirmationRetrait !== userId) {
     etat.confirmationRetrait = userId;
-    peindreQuai();
+    peindreMembres();
     return;
   }
   etat.confirmationRetrait = null;
   try {
     await api(`/api/cales/${etat.cale.id}/membres/${userId}`, { method: 'DELETE' });
     etat.cale.membres = etat.cale.membres.filter((m) => m.id !== userId);
-    peindreQuai();
+    peindreMembres();
   } catch (err) {
     annoncer(err.message, { erreur: true });
-    peindreQuai();
+    peindreMembres();
   }
 }
 
-async function copierAmarre() {
+async function copierCode() {
   try {
     await navigator.clipboard.writeText(etat.cale.amarre);
-    annoncer('Amarre copiée.');
+    annoncer('Code copié.');
   } catch {
-    annoncer(`Amarre : ${etat.cale.amarre}`);
+    annoncer(`Code d’invitation : ${etat.cale.amarre}`);
   }
 }
 
-async function demanderEteindre() {
+async function demanderArreter() {
   if (!etat.confirmerExtinction) {
     etat.confirmerExtinction = true;
-    peindreActions();
+    peindreActionsGroupe();
     return;
   }
   etat.confirmerExtinction = false;
@@ -996,27 +1066,39 @@ async function demanderEteindre() {
   } catch (err) {
     annoncer(err.message, { erreur: true });
   }
-  peindreActions();
+  peindreActionsGroupe();
 }
 
-function ouvrirHorizon() {
-  etat.mode = 'horizon';
-  peindreScene();
-}
-
-function retourJournal() {
-  if (etat.assis && !etat.tient) {
-    etat.assis = false;
-    envoyer({ type: 'quitter-eclat' });
-    for (const id of [...etat.liens.keys()]) fermerLien(id);
+async function rejoindreVoixUtilisateur() {
+  if (etat.enVoix || etat.envoiVoix) return;
+  etat.envoiVoix = true;
+  annoncer('');
+  try {
+    etat.fluxVoix = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+    etat.enVoix = true;
+    envoyer({ type: 'voix-rejoindre' });
+    peindreVoixActions();
+    peindreTuiles();
+  } catch {
+    etat.fluxVoix?.getTracks().forEach((piste) => piste.stop());
+    etat.fluxVoix = null;
+    etat.enVoix = false;
+    annoncer('Le micro ne s’ouvre pas.', { erreur: true });
+    peindreVoixActions();
+  } finally {
+    etat.envoiVoix = false;
   }
-  etat.mode = 'journal';
-  peindreActions();
-  peindreScene();
 }
 
-async function obtenirFlux(sansLentille) {
-  if (sansLentille) return eclatDessine(etat.moi.nom);
+function quitterVoixUtilisateur() {
+  if (etat.enVoix) envoyer({ type: 'voix-quitter' });
+  couperVoix();
+  peindreVoixActions();
+  peindreTuiles();
+}
+
+async function obtenirFlux(sansCamera) {
+  if (sansCamera) return directDessine(etat.moi.nom);
   const stream = await navigator.mediaDevices.getUserMedia({
     video: { width: { ideal: 1280 }, height: { ideal: 720 } },
     audio: true,
@@ -1024,78 +1106,75 @@ async function obtenirFlux(sansLentille) {
   return { stream, stop() {} };
 }
 
-function refusLentille(e) {
+function refusCamera(e) {
   return ['NotAllowedError', 'NotFoundError', 'NotReadableError', 'OverconstrainedError', 'SecurityError'].includes(e?.name);
 }
 
-async function allumer(sansLentille) {
+async function lancerDirect(sansCamera) {
   if (etat.envoi) return;
   etat.envoi = true;
   annoncer('');
   try {
-    const media = await obtenirFlux(sansLentille);
+    const media = await obtenirFlux(sansCamera);
     etat.fluxLocal = media.stream;
     etat.dessin = media;
     etat.tient = true;
     const eclat = await api(`/api/cales/${etat.cale.id}/eclat`, { method: 'POST' });
     etat.cale.eclat = eclat;
     etat.eclatId = eclat.id;
-    etat.mode = 'horizon';
     etat.houle = [];
     etat.lentilleRefusee = false;
     etat.imageRecue = true;
     envoyer({ type: 'tenir', eclatId: eclat.id });
-    peindreActions();
-    peindreScene();
+    peindreActionsGroupe();
+    peindreDirect();
+    peindreListeGroupes();
   } catch (e) {
     couperFlux();
-    if (refusLentille(e)) {
+    if (refusCamera(e)) {
       etat.lentilleRefusee = true;
-      annoncer('La lentille ne s’ouvre pas. Vous pouvez allumer un éclat dessiné.', { erreur: true });
-    } else annoncer(e.message || 'Impossible d’allumer.', { erreur: true });
-    peindreActions();
-    if (etat.mode === 'journal') peindreBande();
+      annoncer('La caméra ne s’ouvre pas. Vous pouvez lancer un direct sans caméra.', { erreur: true });
+    } else annoncer(e.message || 'Impossible de lancer le direct.', { erreur: true });
+    peindreActionsGroupe();
   } finally {
     etat.envoi = false;
   }
 }
 
-async function reprendre(sansLentille) {
+async function reprendre(sansCamera) {
   if (etat.envoi || !etat.cale?.eclat) return;
   etat.envoi = true;
   try {
-    const media = await obtenirFlux(sansLentille);
+    const media = await obtenirFlux(sansCamera);
     etat.fluxLocal = media.stream;
     etat.dessin = media;
     etat.tient = true;
     etat.eclatId = etat.cale.eclat.id;
-    etat.mode = 'horizon';
     etat.lentilleRefusee = false;
     try { etat.houle = await api(`/api/eclats/${etat.eclatId}/houle`); } catch { etat.houle = []; }
     envoyer({ type: 'tenir', eclatId: etat.eclatId });
-    peindreActions();
-    peindreScene();
+    peindreActionsGroupe();
+    peindreDirect();
   } catch (e) {
     couperFlux();
-    if (refusLentille(e)) {
+    if (refusCamera(e)) {
       etat.lentilleRefusee = true;
-      annoncer('La lentille ne s’ouvre pas.', { erreur: true });
-    } else annoncer(e.message || 'Impossible de reprendre.', { erreur: true });
-    peindreActions();
+      annoncer('La caméra ne s’ouvre pas.', { erreur: true });
+    } else annoncer(e.message || 'Impossible de reprendre le direct.', { erreur: true });
+    peindreActionsGroupe();
   } finally {
     etat.envoi = false;
   }
 }
 
-async function asseoir() {
+async function regarder() {
   const eclat = etat.cale?.eclat;
   if (!eclat || eclat.auteurId === etat.moi.id) return;
   etat.assis = true;
   etat.eclatId = eclat.id;
-  etat.mode = 'horizon';
   etat.imageRecue = false;
   try { etat.houle = await api(`/api/eclats/${eclat.id}/houle`); } catch { etat.houle = []; }
-  peindreScene();
+  peindreDirect();
   envoyer({ type: 'asseoir', eclatId: eclat.id });
 }
 
@@ -1115,34 +1194,43 @@ function couperFlux() {
   etat.fluxLocal = null;
 }
 
-function eclatDessine(nom) {
+function couperVoix() {
+  etat.enVoix = false;
+  for (const lien of etat.liensVoix.values()) {
+    try { lien.pc.close(); } catch { /* déjà clos */ }
+    lien.audio?.remove();
+  }
+  etat.liensVoix.clear();
+  etat.fluxVoix?.getTracks().forEach((piste) => piste.stop());
+  etat.fluxVoix = null;
+}
+
+function directDessine(nom) {
   const toile = document.createElement('canvas');
   toile.width = 1280;
   toile.height = 720;
   const ctx = toile.getContext('2d');
-  let frame = 0;
   let raf = 0;
   const tick = () => {
-    frame += 1;
     ctx.fillStyle = '#132e2b';
     ctx.fillRect(0, 0, 1280, 720);
-    ctx.strokeStyle = 'rgba(244, 239, 230, 0.28)';
-    ctx.lineWidth = 2;
-    for (let i = 0; i < 5; i += 1) {
-      ctx.beginPath();
-      ctx.arc(980, 430, 70 + i * 46 + (frame % 40), 0, Math.PI * 2);
-      ctx.stroke();
-    }
+    ctx.fillStyle = '#f4efe6';
+    ctx.beginPath();
+    ctx.arc(220, 300, 70, 0, Math.PI * 2);
+    ctx.fill();
     ctx.fillStyle = '#c4622d';
     ctx.beginPath();
-    ctx.arc(980, 430, 16, 0, Math.PI * 2);
+    ctx.moveTo(250, 280);
+    ctx.lineTo(360, 240);
+    ctx.lineTo(360, 340);
+    ctx.closePath();
     ctx.fill();
     ctx.fillStyle = '#f4efe6';
     ctx.font = '64px Georgia, serif';
-    ctx.fillText(nom, 72, 330);
+    ctx.fillText(nom, 420, 300);
     ctx.font = '28px sans-serif';
     ctx.fillStyle = '#e7dcc8';
-    ctx.fillText('Éclat sans lentille', 72, 390);
+    ctx.fillText('Direct sans caméra', 420, 360);
     raf = requestAnimationFrame(tick);
   };
   tick();
@@ -1175,7 +1263,7 @@ async function activerSon() {
     annoncer('');
   } catch {
     video.muted = true;
-    annoncer('Le navigateur garde le son couvert.', { erreur: true });
+    annoncer('Le navigateur garde le son coupé.', { erreur: true });
   }
   peindreLegende();
 }
@@ -1199,29 +1287,21 @@ async function lireDistant(stream) {
     video.muted = true;
     try { await video.play(); } catch { /* image muette impossible */ }
     etat.sonBloque = true;
-    annoncer('Le son est couvert par le navigateur. Touchez « Activer le son ».', { erreur: true });
+    annoncer('Le son est coupé par le navigateur. Touchez « Activer le son ».', { erreur: true });
   }
   etat.imageRecue = true;
   peindreLegende();
 }
 
-function creerLien(pairId) {
+function creerConnexion(pairId, vocal) {
   const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
   const lien = { pc, attente: [] };
   pc.onicecandidate = (ev) => {
     if (!ev.candidate) return;
-    envoyer({
-      type: 'signal',
-      eclatId: etat.eclatId,
-      pour: pairId,
-      charge: { kind: 'glace', candidate: ev.candidate.toJSON() },
-    });
+    const charge = { kind: 'glace', candidate: ev.candidate.toJSON() };
+    if (vocal) envoyer({ type: 'voix-signal', pour: pairId, charge });
+    else envoyer({ type: 'signal', eclatId: etat.eclatId, pour: pairId, charge });
   };
-  if (!etat.tient) {
-    pc.ontrack = (ev) => {
-      lireDistant(ev.streams[0] || new MediaStream([ev.track]));
-    };
-  }
   return lien;
 }
 
@@ -1232,6 +1312,14 @@ function fermerLien(id) {
   etat.liens.delete(id);
 }
 
+function fermerLienVoix(id) {
+  const lien = etat.liensVoix.get(id);
+  if (!lien) return;
+  try { lien.pc.close(); } catch { /* déjà clos */ }
+  lien.audio?.remove();
+  etat.liensVoix.delete(id);
+}
+
 async function viderGlace(lien) {
   while (lien.attente.length) {
     const candidat = lien.attente.shift();
@@ -1239,7 +1327,7 @@ async function viderGlace(lien) {
   }
 }
 
-async function appliquer(lien, charge, pairId) {
+async function appliquer(lien, charge, pairId, vocal) {
   if (charge.kind === 'glace') {
     if (!lien.pc.remoteDescription) {
       lien.attente.push(charge.candidate);
@@ -1253,12 +1341,9 @@ async function appliquer(lien, charge, pairId) {
     await viderGlace(lien);
     const reponse = await lien.pc.createAnswer();
     await lien.pc.setLocalDescription(reponse);
-    envoyer({
-      type: 'signal',
-      eclatId: etat.eclatId,
-      pour: pairId,
-      charge: { kind: 'reponse', sdp: lien.pc.localDescription.sdp },
-    });
+    const chargeReponse = { kind: 'reponse', sdp: lien.pc.localDescription.sdp };
+    if (vocal) envoyer({ type: 'voix-signal', pour: pairId, charge: chargeReponse });
+    else envoyer({ type: 'signal', eclatId: etat.eclatId, pour: pairId, charge: chargeReponse });
     return;
   }
   if (charge.kind === 'reponse') {
@@ -1270,7 +1355,12 @@ async function appliquer(lien, charge, pairId) {
 async function offrir(spectateurId) {
   fermerLien(spectateurId);
   if (!etat.fluxLocal) return;
-  const lien = creerLien(spectateurId);
+  const lien = creerConnexion(spectateurId, false);
+  if (!etat.tient) {
+    lien.pc.ontrack = (ev) => {
+      lireDistant(ev.streams[0] || new MediaStream([ev.track]));
+    };
+  }
   for (const piste of etat.fluxLocal.getTracks()) lien.pc.addTrack(piste, etat.fluxLocal);
   etat.liens.set(spectateurId, lien);
   const offre = await lien.pc.createOffer();
@@ -1288,23 +1378,183 @@ async function recevoirSignal(de, charge) {
   if (etat.tient) {
     const lien = etat.liens.get(de);
     if (!lien) return;
-    await appliquer(lien, charge, de);
+    await appliquer(lien, charge, de, false);
     return;
   }
   if (!etat.assis) return;
   let lien = etat.liens.get(de);
   if (!lien && charge.kind === 'offre') {
-    lien = creerLien(de);
+    lien = creerConnexion(de, false);
+    lien.pc.ontrack = (ev) => {
+      lireDistant(ev.streams[0] || new MediaStream([ev.track]));
+    };
     etat.liens.set(de, lien);
   }
   if (!lien) return;
-  await appliquer(lien, charge, de);
+  await appliquer(lien, charge, de, false);
+}
+
+async function offrirVoix(pairId) {
+  fermerLienVoix(pairId);
+  if (!etat.fluxVoix) return;
+  const lien = preparerLienVoix(pairId);
+  const offre = await lien.pc.createOffer();
+  await lien.pc.setLocalDescription(offre);
+  envoyer({
+    type: 'voix-signal',
+    pour: pairId,
+    charge: { kind: 'offre', sdp: lien.pc.localDescription.sdp },
+  });
+}
+
+function preparerLienVoix(pairId) {
+  const lien = creerConnexion(pairId, true);
+  const audio = document.createElement('audio');
+  audio.autoplay = true;
+  document.getElementById('sons')?.append(audio);
+  lien.audio = audio;
+  lien.pc.ontrack = (ev) => {
+    audio.srcObject = ev.streams[0] || new MediaStream([ev.track]);
+    audio.play().catch(() => {});
+  };
+  for (const piste of etat.fluxVoix.getTracks()) lien.pc.addTrack(piste, etat.fluxVoix);
+  etat.liensVoix.set(pairId, lien);
+  return lien;
+}
+
+async function recevoirSignalVoix(de, charge) {
+  if (!charge || typeof charge !== 'object' || !etat.enVoix) return;
+  let lien = etat.liensVoix.get(de);
+  if (!lien && charge.kind === 'offre') lien = preparerLienVoix(de);
+  if (!lien) return;
+  await appliquer(lien, charge, de, true);
+}
+
+async function peindreAmis() {
+  document.title = 'Amis · Talk';
+  etat.ecran = 'amis';
+  etat.amis = await api('/api/amis');
+  const avis = etat.avis;
+  etat.avis = '';
+  document.getElementById('principal').replaceChildren(el('div', { class: 'page' }, [
+    el('h1', {}, 'Amis'),
+    el('p', { id: 'annonce', class: `annonce${avis ? ' erreur' : ''}`, role: 'status' }, avis),
+    el('form', { class: 'composeur', onsubmit: ajouterAmi }, [
+      el('label', { class: 'champ' }, [
+        el('span', { class: 'etiquette' }, 'Identifiant'),
+        el('input', { id: 'identifiant-ami', name: 'identifiant', maxlength: '20', required: true, autocomplete: 'off' }),
+      ]),
+      el('button', { type: 'submit', class: 'plein', 'data-action': 'ajouter-ami' }, 'Ajouter'),
+    ]),
+    etat.amis.length
+      ? el('ul', { class: 'liste-amis' }, etat.amis.map((ami) => el('li', { class: 'ami' }, [
+        el('div', {}, [
+          el('strong', {}, ami.nom),
+          el('span', { class: 'identifiant' }, ami.identifiant),
+        ]),
+        el('button', { type: 'button', class: 'texte', 'data-action': 'ecrire', onclick: () => aller(`/messages/${ami.id}`) }, 'Écrire'),
+      ])))
+      : el('p', { class: 'vide' }, 'Aucun ami pour le moment.'),
+  ]));
+  peindreOnglets();
+  peindreListeGroupes();
+}
+
+async function ajouterAmi(e) {
+  e.preventDefault();
+  const champ = document.getElementById('identifiant-ami');
+  try {
+    await api('/api/amis', { method: 'POST', body: { identifiant: champ.value } });
+    champ.value = '';
+    await peindreAmis();
+    annoncer('Ami ajouté.');
+  } catch (err) {
+    annoncer(err.message, { erreur: true });
+  }
+}
+
+async function peindreMessages(amiId) {
+  document.title = 'Messages privés · Talk';
+  etat.ecran = 'messages';
+  etat.amiId = amiId;
+  etat.amis = await api('/api/amis');
+  const ami = etat.amis.find((a) => a.id === amiId) || null;
+  if (ami) {
+    try { etat.prives = await api(`/api/amis/${ami.id}/messages`); } catch { etat.prives = []; }
+  } else etat.prives = [];
+  document.getElementById('principal').replaceChildren(el('div', { class: 'page' }, [
+    el('h1', {}, 'Messages privés'),
+    el('p', { id: 'annonce', class: 'annonce', role: 'status' }),
+    etat.amis.length
+      ? el('div', { class: 'choix-ami' }, etat.amis.map((a) => el('button', {
+        type: 'button',
+        class: 'choix',
+        'data-ami': a.id,
+        'aria-current': a.id === amiId ? 'true' : 'false',
+        onclick: () => aller(`/messages/${a.id}`),
+      }, a.nom)))
+      : el('p', { class: 'vide' }, 'Ajoutez un ami pour écrire.'),
+    ami ? el('section', { class: 'fil' }, [
+      el('h2', {}, ami.nom),
+      el('p', { class: 'identifiant' }, ami.identifiant),
+      el('div', { id: 'fil-prive', class: 'journal' }),
+      formeMessage('corps-prive', 'Message', 'envoyer-prive', envoyerPrive, 'Envoyer'),
+    ]) : el('p', {}, 'Choisissez un ami.'),
+  ]));
+  peindreFilPrive();
+  peindreOnglets();
+  peindreListeGroupes();
+}
+
+function peindreFilPrive() {
+  const zone = document.getElementById('fil-prive');
+  if (!zone) return;
+  if (!etat.prives.length) {
+    zone.replaceChildren(el('p', { class: 'vide' }, 'Aucun message.'));
+    return;
+  }
+  zone.replaceChildren(...etat.prives.map((message) => el('article', { class: 'ligne-journal' }, [
+    el('time', { class: 'heure', datetime: new Date(message.creeLe).toISOString() }, heure(message.creeLe)),
+    el('div', {}, [
+      el('div', { class: 'auteur' }, message.auteurNom),
+      el('p', { class: 'corps' }, message.corps),
+    ]),
+  ])));
+}
+
+function ajouterPrive(message) {
+  if (!message) return;
+  const autre = message.deId === etat.moi.id ? message.versId : message.deId;
+  if (etat.ecran !== 'messages' || etat.amiId !== autre) return;
+  if (etat.prives.some((m) => m.id === message.id)) return;
+  etat.prives.push(message);
+  etat.prives.sort((a, b) => a.creeLe - b.creeLe);
+  peindreFilPrive();
+}
+
+async function envoyerPrive(e) {
+  e.preventDefault();
+  const champ = document.getElementById('corps-prive');
+  if (!champ || !etat.amiId) return;
+  const corps = champ.value;
+  if (!corps.trim()) return;
+  champ.disabled = true;
+  try {
+    const message = await api(`/api/amis/${etat.amiId}/messages`, { method: 'POST', body: { corps } });
+    champ.value = '';
+    ajouterPrive(message);
+  } catch (err) {
+    annoncer(err.message, { erreur: true });
+  } finally {
+    champ.disabled = false;
+    champ.focus();
+  }
 }
 
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && etat.quaiOuvert) {
-    etat.quaiOuvert = false;
-    peindreQuai();
+  if (e.key === 'Escape' && etat.membresOuverts) {
+    etat.membresOuverts = false;
+    peindreMembres();
   }
 });
 window.addEventListener('popstate', () => { router(); });
@@ -1313,7 +1563,7 @@ async function demarrer() {
   const res = await fetch('/api/moi', { credentials: 'same-origin' });
   if (res.status === 401) etat.moi = null;
   else if (res.ok) etat.moi = await res.json();
-  else throw new Error('Session illisible.');
+  else throw new Error('La session ne se lit pas.');
   if (etat.moi) brancher();
   await router();
 }
