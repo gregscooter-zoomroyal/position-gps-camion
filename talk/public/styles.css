@@ -100,21 +100,26 @@ a { color: var(--cuivre-fonce); }
 }
 
 .marque.grande {
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0.55rem;
+  display: block;
+  width: 100%;
+  margin: 0 0 0.2rem;
 }
 
 .marque.grande .logo {
-  width: 96px;
-  height: 96px;
+  width: 100%;
+  height: auto;
   border-radius: 18px;
 }
 
-.marque.grande .marque-nom {
-  font-size: clamp(3rem, 8vw, 4.6rem);
-  line-height: 0.9;
-  letter-spacing: 0.12em;
+.rail .marque {
+  display: block;
+  width: 100%;
+}
+
+.rail .logo {
+  width: 100%;
+  height: auto;
+  border-radius: 14px;
 }
 
 .entree {
@@ -123,6 +128,8 @@ a { color: var(--cuivre-fonce); }
   place-items: center;
   padding: 1.5rem;
 }
+
+.entree .carte-forme { width: min(40rem, 100%); }
 
 .carte-forme, .bande-papier {
   width: min(28rem, 100%);

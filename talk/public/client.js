@@ -64,14 +64,13 @@ function el(tag, attrs = {}, children = []) {
   return node;
 }
 
-function logo() {
-  return el('img', { class: 'logo', src: '/logo.png', alt: '' });
+function logo(alt) {
+  return el('img', { class: 'logo', src: '/logo.png?v=3', alt: alt || '' });
 }
 
 function marque(grande) {
   const wrap = el(grande ? 'h1' : 'span', { class: grande ? 'marque grande' : 'marque' });
-  wrap.append(logo());
-  wrap.append(el('span', { class: 'marque-nom' }, 'Talk'));
+  wrap.append(logo('Talk'));
   return wrap;
 }
 
@@ -429,8 +428,7 @@ function assurerCoquille() {
   document.getElementById('ecran').replaceChildren(el('div', { class: 'coquille' }, [
     el('aside', { id: 'rail', class: 'rail' }, [
       el('button', { type: 'button', class: 'marque', 'data-action': 'accueil', onclick: () => aller('/') }, [
-        logo(),
-        el('span', { class: 'marque-nom' }, 'Talk'),
+        logo('Talk'),
       ]),
       el('h2', {}, 'Mes groupes'),
       el('div', { id: 'liste-groupes', class: 'liste-groupes' }),
