@@ -65,7 +65,7 @@ function el(tag, attrs = {}, children = []) {
 }
 
 function logo(alt) {
-  return el('img', { class: 'logo', src: '/logo.png?v=3', alt: alt || '' });
+  return el('img', { class: 'logo', src: '/logo.png?v=4', alt: alt || '' });
 }
 
 function marque(grande) {
